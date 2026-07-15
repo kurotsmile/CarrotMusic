@@ -24,7 +24,7 @@ if ($price <= 0) {
 
 if (empty($paypalConfig['client_id']) || empty($paypalConfig['client_secret']) || !function_exists('curl_init')) {
     http_response_code(500);
-    exit('PayPal config is missing.');
+    exit('Cổng thanh toán hiện chưa sẵn sàng. Vui lòng quay lại sau.');
 }
 
 $baseApi = !empty($paypalConfig['sandbox']) ? 'https://api-m.sandbox.paypal.com' : 'https://api-m.paypal.com';
@@ -46,7 +46,7 @@ curl_close($curl);
 $tokenData = json_decode((string) $tokenResponse, true);
 if ($tokenStatus >= 300 || empty($tokenData['access_token'])) {
     http_response_code(502);
-    exit('Unable to connect to PayPal.');
+    exit('Chưa thể kết nối đến cổng thanh toán. Vui lòng thử lại sau.');
 }
 
 $scheme = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http';
@@ -87,7 +87,7 @@ curl_close($curl);
 $orderData = json_decode((string) $orderResponse, true);
 if ($orderStatus >= 300 || empty($orderData['id']) || empty($orderData['links'])) {
     http_response_code(502);
-    exit('Unable to create PayPal order.');
+    exit('Chưa thể tạo đơn thanh toán. Vui lòng thử lại sau.');
 }
 
 $stmt = $pdo->prepare('
@@ -114,4 +114,4 @@ foreach ($orderData['links'] as $link) {
 }
 
 http_response_code(502);
-exit('PayPal approval link is missing.');
+exit('Chưa nhận được liên kết xác nhận thanh toán. Vui lòng thử lại sau.');

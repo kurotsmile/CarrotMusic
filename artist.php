@@ -8,19 +8,35 @@ $errorMessage = $db_error ?? '';
 
 if ($pdo instanceof PDO && $artistId > 0) {
     try {
-        $artist = music_fetch_artist($pdo, $artistId);
-        if ($artist) {
-            $stmt = $pdo->prepare('
-                SELECT s.*, GROUP_CONCAT(DISTINCT sa.name ORDER BY sa.name SEPARATOR ", ") AS artist_names
-                FROM song s
-                INNER JOIN song_artist_map target_map ON target_map.song_id = s.id AND target_map.artist_id = ?
-                LEFT JOIN song_artist_map sam ON sam.song_id = s.id
-                LEFT JOIN song_artist sa ON sa.id = sam.artist_id
-                GROUP BY s.id
-                ORDER BY s.created_at DESC, s.id ASC
-            ');
-            $stmt->execute([$artistId]);
-            $songs = $stmt->fetchAll();
+        $cacheKey = music_cache_key('music_artist_detail', [
+            'id' => $artistId,
+        ]);
+        $cachedArtist = music_cache_get($cacheKey, 86400);
+
+        if (is_array($cachedArtist)) {
+            $artist = is_array($cachedArtist['artist'] ?? null) ? $cachedArtist['artist'] : null;
+            $songs = is_array($cachedArtist['songs'] ?? null) ? $cachedArtist['songs'] : [];
+        } else {
+            $artist = music_fetch_artist($pdo, $artistId);
+            if ($artist) {
+                $stmt = $pdo->prepare('
+                    SELECT s.*, GROUP_CONCAT(DISTINCT sa.name ORDER BY sa.name SEPARATOR ", ") AS artist_names
+                    FROM song s
+                    INNER JOIN song_artist_map target_map ON target_map.song_id = s.id AND target_map.artist_id = ?
+                    LEFT JOIN song_artist_map sam ON sam.song_id = s.id
+                    LEFT JOIN song_artist sa ON sa.id = sam.artist_id
+                    GROUP BY s.id
+                    ORDER BY s.created_at DESC, s.id ASC
+                ');
+                $stmt->execute([$artistId]);
+                $songs = $stmt->fetchAll();
+
+                music_cache_set($cacheKey, [
+                    'created_at' => date('c'),
+                    'artist' => $artist,
+                    'songs' => $songs,
+                ]);
+            }
         }
     } catch (Throwable $e) {
         $errorMessage = $e->getMessage();
@@ -51,6 +67,9 @@ music_render_header($title, $description, music_cover($artist['avatar']));
             <span><?= music_h($artist['lang_key'] ?? 'vi') ?></span>
             <span><?= number_format(count($songs)) ?> <?= music_h(music_label('music.label.songs', 'bài hát')) ?></span>
         </div>
+        <div class="song-actions">
+            <?= music_detail_action_buttons((string) $artist['name'], music_artist_url((int) $artist['id'])) ?>
+        </div>
         <?php if (!empty($artist['description'])): ?>
             <div class="lyrics">
                 <?= $artist['description']; ?>
@@ -64,7 +83,7 @@ music_render_header($title, $description, music_cover($artist['avatar']));
     <div class="section-head">
         <div>
             <h2><?= music_h(sprintf(music_label('music.artist.songs_heading', 'Bài hát của %s'), $artist['name'])) ?></h2>
-            <p><?= music_h(music_label('music.artist.songs_intro', 'Phát ngay hoặc thêm vào playlist đang chạy.')) ?></p>
+            <p><?= music_h(music_label('music.artist.songs_intro', 'Nghe các bài hát nổi bật và lưu lại những giai điệu bạn muốn phát tiếp.')) ?></p>
         </div>
         <?php if ($songs): ?>
             <button class="btn btn-primary js-add-artist-songs" type="button">

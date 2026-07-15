@@ -10,8 +10,8 @@ $errorMessage = $db_error ?? '';
 if (!$slugCandidates) {
     http_response_code(404);
     music_render_header(
-        music_label('music.meta.page_not_found_title', 'Page not found - CarrotMusic'),
-        music_label('music.meta.page_not_found_description', 'The requested page was not found.')
+        music_label('music.meta.page_not_found_title', 'Không tìm thấy trang - CarrotMusic'),
+        music_label('music.meta.page_not_found_description', 'Trang bạn đang tìm hiện không tồn tại hoặc đã được chuyển đi.')
     );
     echo '<section class="content-page"><div class="empty"><strong>' . music_h(music_label('music.error.page_not_found', 'Không tìm thấy page.')) . '</strong><br>' . music_h(music_label('error.missing_slug', 'Thiếu tham số slug.')) . '</div></section>';
     music_render_footer();
@@ -29,8 +29,8 @@ if ($pdo instanceof PDO) {
 if (!$page && !$errorMessage) {
     http_response_code(404);
     music_render_header(
-        music_label('music.meta.page_not_found_title', 'Page not found - CarrotMusic'),
-        music_label('music.meta.page_not_found_description', 'The requested page was not found.')
+        music_label('music.meta.page_not_found_title', 'Không tìm thấy trang - CarrotMusic'),
+        music_label('music.meta.page_not_found_description', 'Trang bạn đang tìm hiện không tồn tại hoặc đã được chuyển đi.')
     );
     echo '<section class="content-page"><div class="empty"><strong>' . music_h(music_label('music.error.page_not_found_colon', 'Không tìm thấy page:')) . '</strong><br>' . music_h($pageSlug) . '</div></section>';
     music_render_footer();
@@ -40,8 +40,8 @@ if (!$page && !$errorMessage) {
 if ($errorMessage) {
     http_response_code(500);
     music_render_header(
-        music_label('music.meta.database_error_title', 'Database error - CarrotMusic'),
-        music_label('music.meta.database_error_description', 'Database connection error.')
+        music_label('music.meta.database_error_title', 'CarrotMusic tạm thời chưa sẵn sàng'),
+        music_label('music.meta.database_error_description', 'Trang đang gặp sự cố kết nối. Vui lòng quay lại sau.')
     );
     echo '<section class="content-page"><div class="empty"><strong>' . music_h(music_label('error.mysql', 'Lỗi MySQL:')) . '</strong><br>' . music_h($errorMessage) . '</div></section>';
     music_render_footer();

@@ -44,27 +44,50 @@ $renderGenrePagination = static function (string $genreId, int $currentPage, int
 
 if ($pdo instanceof PDO && $genreId !== '') {
     try {
-        $genre = music_fetch_genre($pdo, $genreId);
-        if ($genre) {
-            $totalSongs = (int) ($genre['song_count'] ?? 0);
-            $totalPages = max(1, (int) ceil($totalSongs / $songsPerPage));
+        $cacheKey = music_cache_key('music_genre_detail', [
+            'id' => $genreId,
+            'page' => $currentPage,
+            'per_page' => $songsPerPage,
+        ]);
+        $cachedGenre = music_cache_get($cacheKey, 86400);
+
+        if (is_array($cachedGenre)) {
+            $genre = is_array($cachedGenre['genre'] ?? null) ? $cachedGenre['genre'] : null;
+            $songs = is_array($cachedGenre['songs'] ?? null) ? $cachedGenre['songs'] : [];
+            $totalSongs = (int) ($cachedGenre['total_songs'] ?? 0);
+            $totalPages = max(1, (int) ($cachedGenre['total_pages'] ?? 1));
             $currentPage = min($currentPage, $totalPages);
-            $offset = ($currentPage - 1) * $songsPerPage;
-            $stmt = $pdo->prepare('
-                SELECT s.*, GROUP_CONCAT(DISTINCT sa.name ORDER BY sa.name SEPARATOR ", ") AS artist_names
-                FROM song s
-                LEFT JOIN song_artist_map sam ON sam.song_id = s.id
-                LEFT JOIN song_artist sa ON sa.id = sam.artist_id
-                WHERE FIND_IN_SET(REPLACE(?, " ", ""), REPLACE(COALESCE(s.genre, ""), " ", "")) > 0
-                GROUP BY s.id
-                ORDER BY s.created_at DESC, s.id ASC
-                LIMIT ? OFFSET ?
-            ');
-            $stmt->bindValue(1, $genreId, PDO::PARAM_STR);
-            $stmt->bindValue(2, $songsPerPage, PDO::PARAM_INT);
-            $stmt->bindValue(3, $offset, PDO::PARAM_INT);
-            $stmt->execute();
-            $songs = $stmt->fetchAll();
+        } else {
+            $genre = music_fetch_genre($pdo, $genreId);
+            if ($genre) {
+                $totalSongs = (int) ($genre['song_count'] ?? 0);
+                $totalPages = max(1, (int) ceil($totalSongs / $songsPerPage));
+                $currentPage = min($currentPage, $totalPages);
+                $offset = ($currentPage - 1) * $songsPerPage;
+                $stmt = $pdo->prepare('
+                    SELECT s.*, GROUP_CONCAT(DISTINCT sa.name ORDER BY sa.name SEPARATOR ", ") AS artist_names
+                    FROM song s
+                    LEFT JOIN song_artist_map sam ON sam.song_id = s.id
+                    LEFT JOIN song_artist sa ON sa.id = sam.artist_id
+                    WHERE FIND_IN_SET(REPLACE(?, " ", ""), REPLACE(COALESCE(s.genre, ""), " ", "")) > 0
+                    GROUP BY s.id
+                    ORDER BY s.created_at DESC, s.id ASC
+                    LIMIT ? OFFSET ?
+                ');
+                $stmt->bindValue(1, $genreId, PDO::PARAM_STR);
+                $stmt->bindValue(2, $songsPerPage, PDO::PARAM_INT);
+                $stmt->bindValue(3, $offset, PDO::PARAM_INT);
+                $stmt->execute();
+                $songs = $stmt->fetchAll();
+
+                music_cache_set($cacheKey, [
+                    'created_at' => date('c'),
+                    'genre' => $genre,
+                    'total_songs' => $totalSongs,
+                    'total_pages' => $totalPages,
+                    'songs' => $songs,
+                ]);
+            }
         }
     } catch (Throwable $e) {
         $errorMessage = $e->getMessage();
@@ -85,16 +108,20 @@ if ($description === '') {
     $description = sprintf(music_label('music.genre.default_description', 'Khám phá các bài hát thuộc thể loại %s trên CarrotMusic.'), $genreTitle);
 }
 
-music_render_header($genreTitle . ' - ' . music_label('music.genre.role', 'Thể loại') . ' | CarrotMusic', $description);
+$genreAvatar = music_cover((string) ($genre['avatar'] ?? ''));
+music_render_header($genreTitle . ' - ' . music_label('music.genre.role', 'Thể loại') . ' | CarrotMusic', $description, $genreAvatar);
 ?>
 <article class="detail">
-    <img class="detail-cover" src="<?= music_h(music_url('cr_player/song.png')) ?>" alt="<?= music_h($genreTitle) ?>">
+    <img class="detail-cover" src="<?= music_h($genreAvatar) ?>" alt="<?= music_h($genreTitle) ?>">
     <div class="detail-main">
         <p class="eyebrow"><?= music_h(music_label('music.genre.eyebrow', 'Genre detail')) ?></p>
         <h1><?= music_h($genreTitle) ?></h1>
         <div class="detail-meta">
             <span><?= music_h($genre['genre_id'] ?? $genreId) ?></span>
             <span><?= number_format($totalSongs) ?> <?= music_h(music_label('music.label.songs', 'bài hát')) ?></span>
+        </div>
+        <div class="song-actions">
+            <?= music_detail_action_buttons($genreTitle, music_genre_url((string) ($genre['genre_id'] ?? $genreId))) ?>
         </div>
         <?php if (!empty($genre['description'])): ?>
             <div class="lyrics">
@@ -108,7 +135,7 @@ music_render_header($genreTitle . ' - ' . music_label('music.genre.role', 'Thể
     <div class="section-head">
         <div>
             <h2><?= music_h(sprintf(music_label('music.genre.songs_heading', 'Bài hát thuộc %s'), $genreTitle)) ?></h2>
-            <p><?= music_h(music_label('music.genre.songs_intro', 'Phát ngay hoặc thêm vào playlist đang chạy.')) ?></p>
+            <p><?= music_h(music_label('music.genre.songs_intro', 'Khám phá những bài hát cùng màu sắc và lưu lại bản nhạc hợp gu của bạn.')) ?></p>
         </div>
     </div>
     <?= $renderGenrePagination((string) ($genre['genre_id'] ?? $genreId), $currentPage, $totalPages) ?>

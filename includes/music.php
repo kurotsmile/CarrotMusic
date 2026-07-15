@@ -43,9 +43,98 @@ function music_h(?string $value): string
     return htmlspecialchars((string) $value, ENT_QUOTES, 'UTF-8');
 }
 
+function music_cache_dir(): string
+{
+    return dirname(__DIR__) . '/storage/cache';
+}
+
+function music_cache_key(string $prefix, array $parts): string
+{
+    $readable = [];
+    foreach ($parts as $key => $value) {
+        $value = trim((string) $value);
+        if ($value === '') {
+            $value = '0';
+        }
+        $readable[] = preg_replace('/[^a-z0-9_-]+/i', '-', (string) $key) . '-' . preg_replace('/[^a-z0-9_-]+/i', '-', strtolower($value));
+    }
+
+    return preg_replace('/[^a-z0-9_-]+/i', '-', $prefix) . '_' . implode('_', $readable) . '_' . substr(sha1(json_encode($parts, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES)), 0, 12);
+}
+
+function music_cache_path(string $key): string
+{
+    $key = preg_replace('/[^a-z0-9_.-]+/i', '-', $key);
+    return music_cache_dir() . '/' . $key . '.json';
+}
+
+function music_cache_get(string $key, int $ttlSeconds): ?array
+{
+    if ($ttlSeconds <= 0) {
+        return null;
+    }
+
+    $path = music_cache_path($key);
+    if (!is_file($path) || (time() - (int) filemtime($path)) > $ttlSeconds) {
+        return null;
+    }
+
+    $payload = json_decode((string) @file_get_contents($path), true);
+    return is_array($payload) ? $payload : null;
+}
+
+function music_cache_set(string $key, array $payload): void
+{
+    $dir = music_cache_dir();
+    if (!is_dir($dir)) {
+        @mkdir($dir, 0775, true);
+    }
+    if (!is_dir($dir) || !is_writable($dir)) {
+        return;
+    }
+
+    $path = music_cache_path($key);
+    $tmp = $path . '.' . getmypid() . '.tmp';
+    $json = json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+    if ($json === false) {
+        return;
+    }
+
+    if (@file_put_contents($tmp, $json, LOCK_EX) !== false) {
+        @rename($tmp, $path);
+    }
+}
+
+function music_cache_clear(string $prefix = ''): int
+{
+    $dir = music_cache_dir();
+    if (!is_dir($dir)) {
+        return 0;
+    }
+
+    $prefix = preg_replace('/[^a-z0-9_.-]+/i', '-', $prefix);
+    $pattern = $dir . '/' . ($prefix !== '' ? $prefix . '*' : '*') . '.json';
+    $deleted = 0;
+    foreach (glob($pattern) ?: [] as $file) {
+        if (is_file($file) && @unlink($file)) {
+            $deleted++;
+        }
+    }
+
+    return $deleted;
+}
+
 function music_play_icon(): string
 {
     return '<svg class="btn-icon" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="currentColor"><path d="M8 5.14v13.72c0 .76.84 1.22 1.48.81l10.78-6.86a.96.96 0 0 0 0-1.62L9.48 4.33A.96.96 0 0 0 8 5.14Z"/></svg>';
+}
+
+function music_detail_action_buttons(string $title = '', string $url = ''): string
+{
+    $title = trim($title);
+    $url = trim($url);
+    return '<button class="btn js-music-share" type="button" data-share-title="' . music_h($title) . '" data-share-url="' . music_h($url) . '"><i class="fas fa-share-alt"></i>' . music_h(music_label('music.action.share', 'Chia sẻ')) . '</button>'
+        . '<button class="btn js-music-qr" type="button" data-share-title="' . music_h($title) . '" data-share-url="' . music_h($url) . '"><i class="fas fa-qrcode"></i>' . music_h(music_label('music.action.qr_code', 'QR code')) . '</button>';
 }
 
 function music_label(string $key, string $default, ?string $langKey = null): string
@@ -77,6 +166,11 @@ function music_artist_url(int $id): string
 function music_genre_url(string $id): string
 {
     return music_url('genre.php?id=' . rawurlencode($id));
+}
+
+function music_song_year_url(int $year): string
+{
+    return music_url('song_year.php?year=' . rawurlencode((string) $year));
 }
 
 function music_split_genres(?string $genres): array
@@ -283,6 +377,28 @@ function music_fetch_songs(PDO $pdo, int $limit = 24, string $where = '', array 
     return $stmt->fetchAll();
 }
 
+function music_fetch_popular_songs(PDO $pdo, int $limit = 14): array
+{
+    $sql = '
+        SELECT s.*, popular.view_count,
+               GROUP_CONCAT(DISTINCT sa.name ORDER BY sa.name SEPARATOR ", ") AS artist_names
+        FROM (
+            SELECT song_id, COUNT(*) AS view_count, MAX(last_seen_at) AS last_viewed_at
+            FROM song_view
+            GROUP BY song_id
+            ORDER BY view_count DESC, last_viewed_at DESC, song_id ASC
+            LIMIT ' . max(1, $limit) . '
+        ) popular
+        INNER JOIN song s ON s.id = popular.song_id
+        LEFT JOIN song_artist_map sam ON sam.song_id = s.id
+        LEFT JOIN song_artist sa ON sa.id = sam.artist_id
+        GROUP BY s.id
+        ORDER BY popular.view_count DESC, MAX(popular.last_viewed_at) DESC, s.id ASC';
+    $stmt = $pdo->prepare($sql);
+    $stmt->execute();
+    return $stmt->fetchAll();
+}
+
 function music_fetch_song(PDO $pdo, string $id): ?array
 {
     $stmt = $pdo->prepare('
@@ -343,7 +459,7 @@ function music_fetch_genre(PDO $pdo, string $id): ?array
     }
 
     $stmt = $pdo->prepare('
-        SELECT ? AS genre_id, ? AS title, "" AS description, COUNT(DISTINCT id) AS song_count
+        SELECT ? AS genre_id, ? AS title, "" AS avatar, "" AS description, COUNT(DISTINCT id) AS song_count
         FROM song
         WHERE FIND_IN_SET(REPLACE(?, " ", ""), REPLACE(COALESCE(genre, ""), " ", "")) > 0
     ');
@@ -359,7 +475,7 @@ function music_has_paid_song(string $songId): bool
 
 function music_render_header(string $title, string $description = '', string $image = ''): void
 {
-    $description = $description !== '' ? $description : music_label('music.meta.description', 'CarrotMusic là cổng nghe nhạc online, phân phối và tải MP3 chất lượng cao.');
+    $description = $description !== '' ? $description : music_label('music.meta.description', 'CarrotMusic là nơi bạn tìm, nghe và lưu lại những bài hát hợp tâm trạng mỗi ngày.');
     $image = $image !== '' ? $image : music_url('favicon/android-chrome-512x512.png');
     $searchQuery = trim((string) ($_GET['q'] ?? ''));
     $lang = current_lang_key();
@@ -394,26 +510,31 @@ function music_render_header(string $title, string $description = '', string $im
 <header class="site-header">
     <a class="brand site-link" href="<?= music_h(music_url('index.php')) ?>">
         <span class="brand-mark">♪</span>
-        <span><strong>CarrotMusic</strong><small><?= music_h(music_label('music.brand_tagline', 'Store Music')) ?></small></span>
+        <span><strong>CarrotMusic</strong><small><?= music_h(music_label('music.brand_tagline', 'Nghe nhạc mỗi ngày')) ?></small></span>
     </a>
     <form class="header-search" method="get" action="<?= music_h(music_url('index.php')) ?>">
         <input name="q" type="search" value="<?= music_h($searchQuery) ?>" placeholder="<?= music_h(music_label('music.search_placeholder', 'Tìm bài hát hoặc nghệ sĩ')) ?>">
         <button type="submit" aria-label="<?= music_h(music_label('action.search', 'Search')) ?>"><i class="fas fa-search"></i></button>
     </form>
     <nav>
-        <a class="site-link" href="<?= music_h(music_url('index.php')) ?>"><?= music_h(music_label('music.nav.explore', 'Explore')) ?></a>
-        <a class="site-link" href="<?= music_h(music_url('index.php#genres')) ?>"><?= music_h(music_label('music.nav.genres', 'Genres')) ?></a>
-        <a class="site-link" href="<?= music_h(music_url('index.php#artists')) ?>"><?= music_h(music_label('music.nav.artists', 'Artists')) ?></a>
+        <span class="header-links">
+            <a class="site-link" href="<?= music_h(music_url('index.php')) ?>"><?= music_h(music_label('music.nav.explore', 'Explore')) ?></a>
+            <a class="site-link" href="<?= music_h(music_url('index.php#genres')) ?>"><?= music_h(music_label('music.nav.genres', 'Genres')) ?></a>
+            <a class="site-link" href="<?= music_h(music_url('index.php#artists')) ?>"><?= music_h(music_label('music.nav.artists', 'Artists')) ?></a>
+            <a class="site-link" href="<?= music_h(music_url('music_tourism.php')) ?>"><?= music_h(music_label('music.nav.tourism', 'Du lịch')) ?></a>
+        </span>
         <?php if ($languageOptions): ?>
-            <select class="music-language-select" aria-label="<?= music_h(music_label('aria.choose_language', 'Choose language')) ?>">
-                <?php foreach ($languageOptions as $language): ?>
-                    <?php $languageKey = (string) ($language['lang_key'] ?? ''); ?>
-                    <?php if ($languageKey === '') continue; ?>
-                    <option value="<?= music_h($languageKey) ?>" data-icon="<?= music_h($language['icon'] ?? '') ?>" <?= $languageKey === $lang ? 'selected' : '' ?>>
-                        <?= music_h(($language['name'] ?? $languageKey) . ' · ' . strtoupper($languageKey)) ?>
-                    </option>
-                <?php endforeach; ?>
-            </select>
+            <span class="header-language">
+                <select class="music-language-select" aria-label="<?= music_h(music_label('aria.choose_language', 'Choose language')) ?>">
+                    <?php foreach ($languageOptions as $language): ?>
+                        <?php $languageKey = (string) ($language['lang_key'] ?? ''); ?>
+                        <?php if ($languageKey === '') continue; ?>
+                        <option value="<?= music_h($languageKey) ?>" data-icon="<?= music_h($language['icon'] ?? '') ?>" <?= $languageKey === $lang ? 'selected' : '' ?>>
+                            <?= music_h(($language['name'] ?? $languageKey) . ' · ' . strtoupper($languageKey)) ?>
+                        </option>
+                    <?php endforeach; ?>
+                </select>
+            </span>
         <?php endif; ?>
     </nav>
 </header>
@@ -494,9 +615,102 @@ function music_render_footer(): void
     </nav>
 </footer>
 <script src="<?= music_h(music_url('cr_player/cr_player.js')) ?>"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 <script>
 cr_player.path = '<?= music_h(music_url('cr_player')) ?>';
 cr_player.onCreate('theme_basic_bottom');
+
+const musicCurrentShareUrl = (button) => {
+    const rawUrl = button?.dataset.shareUrl || window.location.href;
+    try {
+        return new URL(rawUrl, window.location.href).toString();
+    } catch (error) {
+        return window.location.href;
+    }
+};
+
+const musicCopyText = async (text) => {
+    if (navigator.clipboard && window.isSecureContext) {
+        await navigator.clipboard.writeText(text);
+        return;
+    }
+
+    const field = document.createElement('textarea');
+    field.value = text;
+    field.setAttribute('readonly', '');
+    field.style.position = 'fixed';
+    field.style.left = '-9999px';
+    document.body.appendChild(field);
+    field.select();
+    document.execCommand('copy');
+    field.remove();
+};
+
+document.addEventListener('click', async (event) => {
+    const shareButton = event.target.closest('.js-music-share');
+    if (shareButton) {
+        const shareUrl = musicCurrentShareUrl(shareButton);
+        const shareTitle = shareButton.dataset.shareTitle || document.title;
+        if (navigator.share) {
+            try {
+                await navigator.share({title: shareTitle, url: shareUrl});
+                return;
+            } catch (error) {
+                if (error.name === 'AbortError') return;
+            }
+        }
+
+        try {
+            await musicCopyText(shareUrl);
+            Swal.fire({
+                icon: 'success',
+                title: <?= json_encode(music_label('music.share.copied_title', 'Đã sao chép liên kết'), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>,
+                text: shareUrl,
+                confirmButtonColor: '#ff6a00',
+            });
+        } catch (error) {
+            Swal.fire({
+                icon: 'info',
+                title: <?= json_encode(music_label('music.share.copy_title', 'Liên kết chia sẻ'), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>,
+                text: shareUrl,
+                confirmButtonColor: '#ff6a00',
+            });
+        }
+        return;
+    }
+
+    const qrButton = event.target.closest('.js-music-qr');
+    if (!qrButton) return;
+
+    const shareUrl = musicCurrentShareUrl(qrButton);
+    const shareTitle = qrButton.dataset.shareTitle || document.title;
+    Swal.fire({
+        title: shareTitle,
+        html: '<div class="music-qr-modal"><div id="music_qr_code"></div><p>' + shareUrl.replace(/[&<>"']/g, (char) => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;'}[char])) + '</p></div>',
+        confirmButtonColor: '#ff6a00',
+        didOpen: () => {
+            const target = document.getElementById('music_qr_code');
+            if (target && window.QRCode) {
+                new QRCode(target, {
+                    text: shareUrl,
+                    width: 220,
+                    height: 220,
+                    colorDark: '#100b09',
+                    colorLight: '#fff7f2',
+                    correctLevel: QRCode.CorrectLevel.H,
+                });
+            } else if (target) {
+                const fallbackLink = document.createElement('a');
+                fallbackLink.className = 'btn btn-primary';
+                fallbackLink.href = shareUrl;
+                fallbackLink.target = '_blank';
+                fallbackLink.rel = 'noopener noreferrer';
+                fallbackLink.textContent = <?= json_encode(music_label('music.action.open_link', 'Mở liên kết'), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>;
+                target.appendChild(fallbackLink);
+            }
+        },
+    });
+});
 
 const musicLanguageTemplate = (item) => {
     if (!item.id) {

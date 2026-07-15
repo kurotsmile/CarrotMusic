@@ -12,10 +12,10 @@ $song = null;
 
 if ($orderId === '') {
     http_response_code(400);
-    $errorMessage = 'Missing PayPal order token.';
+    $errorMessage = 'Thiếu thông tin đơn hàng thanh toán.';
 } elseif (!$pdo instanceof PDO) {
     http_response_code(500);
-    $errorMessage = $errorMessage ?: 'Database connection is unavailable.';
+    $errorMessage = $errorMessage ?: 'CarrotMusic đang gặp sự cố kết nối. Vui lòng thử lại sau.';
 } else {
     try {
         $stmt = $pdo->prepare('
@@ -30,10 +30,10 @@ if ($orderId === '') {
 
         if (!$order) {
             http_response_code(404);
-            $errorMessage = 'Không tìm thấy đơn hàng PayPal này.';
+            $errorMessage = 'Không tìm thấy đơn hàng thanh toán này.';
         } elseif (($order['status'] ?? '') !== 'COMPLETED' && $payerId !== '') {
             if (empty($paypalConfig['client_id']) || empty($paypalConfig['client_secret']) || !function_exists('curl_init')) {
-                throw new RuntimeException('PayPal config is missing.');
+                throw new RuntimeException('Cổng thanh toán hiện chưa sẵn sàng.');
             }
 
             $baseApi = !empty($paypalConfig['sandbox']) ? 'https://api-m.sandbox.paypal.com' : 'https://api-m.paypal.com';
@@ -53,7 +53,7 @@ if ($orderId === '') {
             curl_close($curl);
             $tokenData = json_decode((string) $tokenResponse, true);
             if ($tokenStatus >= 300 || empty($tokenData['access_token'])) {
-                throw new RuntimeException('Unable to verify PayPal payment.');
+                throw new RuntimeException('Chưa thể xác minh thanh toán. Vui lòng thử lại sau.');
             }
 
             $curl = curl_init($baseApi . '/v2/checkout/orders/' . rawurlencode($orderId) . '/capture');
@@ -80,7 +80,7 @@ if ($orderId === '') {
                     json_encode($captureData, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
                     $orderId,
                 ]);
-                throw new RuntimeException('PayPal payment was not completed.');
+                throw new RuntimeException('Thanh toán chưa được hoàn tất.');
             }
 
             $payerEmail = (string) ($captureData['payer']['email_address'] ?? '');
@@ -96,14 +96,14 @@ if ($orderId === '') {
             ]);
             $_SESSION['paid_music_songs'][(string) $order['song_id']] = true;
             unset($_SESSION['paypal_music_orders'][$orderId]);
-            $noticeMessage = 'Thanh toán PayPal đã hoàn tất.';
+            $noticeMessage = 'Thanh toán đã hoàn tất.';
 
             $stmt->execute($songId !== '' ? [$orderId, $songId] : [$orderId]);
             $order = $stmt->fetch() ?: $order;
         } elseif (($order['status'] ?? '') === 'COMPLETED') {
             $_SESSION['paid_music_songs'][(string) $order['song_id']] = true;
         } else {
-            $noticeMessage = 'Đơn hàng chưa hoàn tất thanh toán trên PayPal.';
+            $noticeMessage = 'Đơn hàng chưa hoàn tất thanh toán.';
         }
     } catch (Throwable $e) {
         http_response_code(402);
@@ -116,22 +116,22 @@ if ($pdo instanceof PDO && !empty($order['song_id'])) {
 }
 
 $isCompleted = (($order['status'] ?? '') === 'COMPLETED');
-$title = ($order['song_name'] ?? 'PayPal Order') . ' - CarrotMusic PayPal';
-music_render_header($title, 'Kết quả thanh toán PayPal cho tải MP3 trên CarrotMusic.', music_cover($order['song_avatar'] ?? ''));
+$title = ($order['song_name'] ?? 'Đơn hàng') . ' - Thanh toán CarrotMusic';
+music_render_header($title, 'Kết quả thanh toán bài hát trên CarrotMusic.', music_cover($order['song_avatar'] ?? ''));
 ?>
 <section class="detail">
     <img class="detail-cover" src="<?= music_h(music_cover($order['song_avatar'] ?? ($song['avatar'] ?? ''))) ?>" alt="">
     <div class="detail-main">
-        <p class="eyebrow">PayPal order</p>
+        <p class="eyebrow">Thanh toán</p>
         <?php if ($errorMessage): ?>
             <h1>Không thể xác nhận đơn hàng</h1>
             <div class="payment-box"><?= music_h($errorMessage) ?></div>
         <?php elseif ($isCompleted): ?>
             <h1>MP3 đã sẵn sàng tải</h1>
-            <div class="payment-box"><?= music_h($noticeMessage ?: 'Cảm ơn bạn đã thanh toán. Bạn có thể tải file MP3 bên dưới.') ?></div>
+            <div class="payment-box"><?= music_h($noticeMessage ?: 'Cảm ơn bạn đã thanh toán. Bài hát đã sẵn sàng để tải xuống.') ?></div>
         <?php else: ?>
             <h1>Đơn hàng chưa hoàn tất</h1>
-            <div class="payment-box"><?= music_h($noticeMessage ?: 'PayPal chưa trả về trạng thái hoàn tất cho đơn hàng này.') ?></div>
+            <div class="payment-box"><?= music_h($noticeMessage ?: 'Đơn hàng này chưa được xác nhận hoàn tất.') ?></div>
         <?php endif; ?>
         <div class="detail-meta">
             <span><?= music_h($order['paypal_order_id'] ?? $orderId) ?></span>

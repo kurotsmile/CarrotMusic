@@ -61,3 +61,125 @@ function music_visit_track_daily_ip(?PDO $pdo): void
         error_log('music_visit_track_daily_ip failed: ' . $e->getMessage());
     }
 }
+
+function music_ensure_song_search_log_table(PDO $pdo): void
+{
+    $pdo->exec("
+        CREATE TABLE IF NOT EXISTS song_search_log (
+          id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+          query VARCHAR(255) NOT NULL,
+          normalized_query VARCHAR(255) NOT NULL,
+          lang VARCHAR(24) DEFAULT NULL,
+          result_count INT UNSIGNED NOT NULL DEFAULT 0,
+          ip_address VARBINARY(16) DEFAULT NULL,
+          ip_text VARCHAR(45) DEFAULT NULL,
+          user_agent VARCHAR(512) DEFAULT NULL,
+          referer VARCHAR(1024) DEFAULT NULL,
+          request_path VARCHAR(1024) DEFAULT NULL,
+          created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          PRIMARY KEY (id),
+          KEY idx_song_search_log_created (created_at),
+          KEY idx_song_search_log_query (normalized_query),
+          KEY idx_song_search_log_lang_created (lang, created_at),
+          KEY idx_song_search_log_ip_created (ip_text, created_at)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+    ");
+}
+
+function music_log_song_search(?PDO $pdo, string $query, int $resultCount = 0): void
+{
+    $query = trim(preg_replace('/\s+/u', ' ', $query) ?? '');
+    if (!$pdo instanceof PDO || PHP_SAPI === 'cli' || $query === '') {
+        return;
+    }
+
+    $query = function_exists('mb_substr') ? mb_substr($query, 0, 255, 'UTF-8') : substr($query, 0, 255);
+    $normalizedQuery = function_exists('mb_strtolower') ? mb_strtolower($query, 'UTF-8') : strtolower($query);
+    $ip = music_visit_client_ip();
+
+    try {
+        music_ensure_song_search_log_table($pdo);
+        $stmt = $pdo->prepare("
+            INSERT INTO song_search_log (
+              query, normalized_query, lang, result_count, ip_address, ip_text,
+              user_agent, referer, request_path
+            )
+            VALUES (
+              :query, :normalized_query, :lang, :result_count,
+              IF(:ip_for_null = '', NULL, INET6_ATON(:ip_for_aton)), NULLIF(:ip_text, ''),
+              :user_agent, :referer, :request_path
+            )
+        ");
+        $stmt->execute([
+            ':query' => $query,
+            ':normalized_query' => $normalizedQuery,
+            ':lang' => substr((string) (function_exists('current_lang_key') ? current_lang_key() : ($_SESSION['key_lang'] ?? '')), 0, 24) ?: null,
+            ':result_count' => max(0, $resultCount),
+            ':ip_for_null' => $ip,
+            ':ip_for_aton' => $ip,
+            ':ip_text' => $ip,
+            ':user_agent' => substr((string) ($_SERVER['HTTP_USER_AGENT'] ?? ''), 0, 512) ?: null,
+            ':referer' => substr((string) ($_SERVER['HTTP_REFERER'] ?? ''), 0, 1024) ?: null,
+            ':request_path' => music_visit_request_path(),
+        ]);
+    } catch (Throwable $e) {
+        error_log('music_log_song_search failed: ' . $e->getMessage());
+    }
+}
+
+function music_track_song_view(?PDO $pdo, string $songId): void
+{
+    $songId = trim($songId);
+    if (!$pdo instanceof PDO || PHP_SAPI === 'cli' || $songId === '') {
+        return;
+    }
+
+    $ip = music_visit_client_ip();
+    if ($ip === '') {
+        return;
+    }
+
+    try {
+        $stmt = $pdo->prepare("
+            INSERT INTO song_view (
+              song_id, view_date, ip_address, ip_text, first_seen_at, last_seen_at,
+              hits, user_agent, referer, request_path
+            )
+            VALUES (:song_id, CURRENT_DATE, INET6_ATON(:ip), :ip_text, NOW(), NOW(), 1, :user_agent, :referer, :request_path)
+            ON DUPLICATE KEY UPDATE
+              hits = hits + 1,
+              last_seen_at = NOW(),
+              user_agent = VALUES(user_agent),
+              referer = VALUES(referer),
+              request_path = VALUES(request_path),
+              updated_at = CURRENT_TIMESTAMP
+        ");
+        $stmt->execute([
+            ':song_id' => $songId,
+            ':ip' => $ip,
+            ':ip_text' => $ip,
+            ':user_agent' => substr((string) ($_SERVER['HTTP_USER_AGENT'] ?? ''), 0, 512) ?: null,
+            ':referer' => substr((string) ($_SERVER['HTTP_REFERER'] ?? ''), 0, 1024) ?: null,
+            ':request_path' => music_visit_request_path(),
+        ]);
+    } catch (Throwable $e) {
+        error_log('music_track_song_view failed: ' . $e->getMessage());
+    }
+}
+
+function music_song_view_count(?PDO $pdo, string $songId): int
+{
+    $songId = trim($songId);
+    if (!$pdo instanceof PDO || $songId === '') {
+        return 0;
+    }
+
+    try {
+        $stmt = $pdo->prepare('SELECT COUNT(*) FROM song_view WHERE song_id = :song_id');
+        $stmt->execute([':song_id' => $songId]);
+        return (int) $stmt->fetchColumn();
+    } catch (Throwable $e) {
+        error_log('music_song_view_count failed: ' . $e->getMessage());
+        return 0;
+    }
+}

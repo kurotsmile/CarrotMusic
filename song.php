@@ -5,6 +5,7 @@ $songId = trim((string) ($_GET['id'] ?? ''));
 $song = null;
 $songArtists = [];
 $relatedSongs = [];
+$songViewCount = 0;
 $paypalConfig = music_paypal_config($pdo ?? null, 'music');
 $errorMessage = $db_error ?? '';
 
@@ -12,6 +13,8 @@ if ($pdo instanceof PDO && $songId !== '') {
     try {
         $song = music_fetch_song($pdo, $songId);
         if ($song) {
+            music_track_song_view($pdo, (string) $song['id']);
+            $songViewCount = music_song_view_count($pdo, (string) $song['id']);
             $songArtists = music_fetch_song_artists($pdo, (string) $song['id']);
             $relatedGenreIds = music_split_genres((string) ($song['genre'] ?? ''));
             $relatedConditions = [];
@@ -39,6 +42,21 @@ if (!$song) {
 
 $artistName = (string) ($song['artist_names'] ?: $song['artist'] ?: music_label('music.label.brand', 'CarrotMusic'));
 $songGenreTags = music_split_genres((string) ($song['genre'] ?? ''));
+$songYear = trim((string) ($song['year'] ?? ''));
+$songLang = trim((string) ($song['lang'] ?? ''));
+$songCountryCode = '';
+if ($songLang !== '' && $pdo instanceof PDO) {
+    try {
+        $countryStmt = $pdo->prepare('SELECT lang_country FROM country WHERE lang_key = ? AND COALESCE(lang_country, "") <> "" ORDER BY id ASC LIMIT 1');
+        $countryStmt->execute([$songLang]);
+        $songCountryCode = strtoupper(trim((string) $countryStmt->fetchColumn()));
+    } catch (Throwable $e) {
+        $songCountryCode = '';
+    }
+}
+if ($songCountryCode === '' && $songLang !== '') {
+    $songCountryCode = strtoupper($songLang);
+}
 $byArtist = $songArtists
     ? array_map(static fn(array $artist): array => [
         '@type' => 'MusicGroup',
@@ -53,7 +71,9 @@ $description = music_excerpt($song['lyrics'] ?: (($song['album'] ?? '') . ' ' . 
 music_render_header($title, $description, music_cover($song['avatar']));
 ?>
 <article class="detail">
-    <img class="detail-cover" src="<?= music_h(music_cover($song['avatar'])) ?>" alt="<?= music_h($song['name']) ?>">
+    <figure class="detail-cover detail-cover--motion">
+        <img src="<?= music_h(music_cover($song['avatar'])) ?>" alt="<?= music_h($song['name']) ?>">
+    </figure>
     <div class="detail-main">
         <p class="eyebrow"><?= music_h(music_label('music.song.eyebrow', 'Song detail')) ?></p>
         <h1><?= music_h($song['name']) ?></h1>
@@ -68,8 +88,12 @@ music_render_header($title, $description, music_cover($song['avatar']));
             <?php foreach ($songGenreTags as $genreTag): ?>
                 <span><a class="genre-tag site-link" href="<?= music_h(music_genre_url($genreTag)) ?>"><?= music_h($genreTag) ?></a></span>
             <?php endforeach; ?>
-            <?php if (!empty($song['year'])): ?><span><?= music_h($song['year']) ?></span><?php endif; ?>
-            <?php if (!empty($song['lang'])): ?><span><?= music_h($song['lang']) ?></span><?php endif; ?>
+            <?php if ($songYear !== ''): ?><span><a class="year-tag site-link" href="<?= music_h(music_song_year_url((int) $songYear)) ?>"><?= music_h($songYear) ?></a></span><?php endif; ?>
+            <?php if ($songLang !== ''): ?><span><a class="lang-tag site-link" href="<?= music_h(music_url('music_tourism.php?country=' . rawurlencode($songCountryCode))) ?>"><?= music_h($songLang) ?></a></span><?php endif; ?>
+            <span class="view-meta">
+                <svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M2.4 12s3.5-6.5 9.6-6.5 9.6 6.5 9.6 6.5-3.5 6.5-9.6 6.5S2.4 12 2.4 12Z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><circle cx="12" cy="12" r="2.7" fill="none" stroke="currentColor" stroke-width="1.8"/></svg>
+                <?= music_h(number_format($songViewCount)) ?> <?= music_h(music_label('label.views', 'views')) ?>
+            </span>
         </div>
         <div class="song-actions">
             <?php if (!empty($song['mp3'])): ?>
@@ -87,6 +111,7 @@ music_render_header($title, $description, music_cover($song['avatar']));
                     YouTube
                 </a>
             <?php endif; ?>
+            <?= music_detail_action_buttons((string) $song['name'], music_song_url((string) $song['id'])) ?>
         </div>
         <?php if (!empty($song['mp3'])): ?>
             <div class="wave-box">
@@ -100,7 +125,7 @@ music_render_header($title, $description, music_cover($song['avatar']));
             </div>
         <?php endif; ?>
         <?php if (!empty($song['mp3']) && !$canDownload && !$paypalConfig['enabled'] && $price > 0): ?>
-            <div class="payment-box"><?= music_h(sprintf(music_label('music.song.paypal_disabled', 'Bài hát có giá %s nhưng PayPal CarrotMusic chưa được bật.'), number_format($price, 2))) ?></div>
+            <div class="payment-box"><?= music_h(sprintf(music_label('music.song.paypal_disabled', 'Bài hát này có giá %s, nhưng tính năng thanh toán hiện chưa sẵn sàng. Vui lòng quay lại sau.'), number_format($price, 2))) ?></div>
         <?php endif; ?>
 
         <?php
@@ -121,7 +146,7 @@ music_render_header($title, $description, music_cover($song['avatar']));
 
 <?php if ($relatedSongs): ?>
 <section class="section">
-    <div class="section-head"><div><h2><?= music_h(music_label('music.section.related_songs', 'Bài liên quan')) ?></h2><p><?= music_h(music_label('music.section.related_songs_intro', 'Tiếp tục nghe mà không dừng player hiện tại.')) ?></p></div></div>
+    <div class="section-head"><div><h2><?= music_h(music_label('music.section.related_songs', 'Bài liên quan')) ?></h2><p><?= music_h(music_label('music.section.related_songs_intro', 'Tiếp tục khám phá những giai điệu có cùng cảm xúc.')) ?></p></div></div>
     <div class="grid">
         <?php foreach ($relatedSongs as $related): ?>
             <article class="song-card">
@@ -144,28 +169,80 @@ music_render_header($title, $description, music_cover($song['avatar']));
 <script src="https://unpkg.com/wavesurfer.js@7/dist/wavesurfer.min.js"></script>
 <script>
 (() => {
-    const container = document.getElementById('song_waveform');
-    const playButton = document.querySelector('.wave-play');
-    if (!container || !playButton || !window.WaveSurfer) return;
+    const songData = {
+        name: <?= json_encode((string) $song['name'], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>,
+        mp3: <?= json_encode((string) $song['mp3'], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>,
+        url: <?= json_encode((string) $song['mp3'], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>,
+        artist: <?= json_encode($artistName, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>,
+        album: <?= json_encode($artistName, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>,
+        avatar: <?= json_encode(music_cover($song['avatar']), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>,
+        youtube: <?= json_encode((string) ($song['link_ytb'] ?? ''), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>,
+        is_live: false,
+    };
 
-    const wave = WaveSurfer.create({
-        container,
-        url: <?= json_encode((string) $song['mp3'], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) ?>,
-        height: 86,
-        barWidth: 3,
-        barGap: 2,
-        barRadius: 3,
-        waveColor: '#ffb36f',
-        progressColor: '#ff6a00',
-        cursorColor: '#e11d1d',
-        cursorWidth: 2,
-        normalize: true,
-    });
+    const bootWaveform = (attempt = 0) => {
+        const container = document.getElementById('song_waveform');
+        const playButton = document.querySelector('.wave-play');
+        if (!container || !playButton) return;
+        if (!window.WaveSurfer || !window.cr_player || !cr_player.audio_player) {
+            if (attempt < 80) window.setTimeout(() => bootWaveform(attempt + 1), 100);
+            return;
+        }
 
-    playButton.addEventListener('click', () => wave.playPause());
-    wave.on('play', () => playButton.classList.add('is-playing'));
-    wave.on('pause', () => playButton.classList.remove('is-playing'));
-    wave.on('finish', () => playButton.classList.remove('is-playing'));
+        const audio = cr_player.audio_player;
+        const songUrl = new URL(songData.mp3, window.location.href).href;
+        const waveformUrl = new URL(songUrl);
+        waveformUrl.searchParams.set('cors', '1');
+        const isThisSong = () => audio.src === songUrl;
+        const wave = WaveSurfer.create({
+            container,
+            url: waveformUrl.href,
+            height: 86,
+            barWidth: 3,
+            barGap: 2,
+            barRadius: 3,
+            cursorColor: '#e11d1d',
+            cursorWidth: 2,
+            normalize: true,
+            interact: false,
+            waveColor: '#ffb36f',
+            progressColor: '#ff6a00',
+        });
+
+        if (typeof wave.setMuted === 'function') wave.setMuted(true);
+
+        const updateState = () => {
+            const isPlaying = isThisSong() && !audio.paused && !audio.ended;
+            playButton.classList.toggle('is-playing', isPlaying);
+            container.classList.toggle('is-playing', isPlaying);
+            if (isThisSong() && Number.isFinite(audio.duration) && audio.duration > 0) {
+                wave.seekTo(Math.max(0, Math.min(1, audio.currentTime / audio.duration)));
+            }
+        };
+
+        playButton.addEventListener('click', () => {
+            if (isThisSong()) {
+                cr_player.playOrPause();
+            } else {
+                cr_player.start(songData, false);
+            }
+            window.setTimeout(updateState, 80);
+        });
+
+        audio.addEventListener('play', updateState);
+        audio.addEventListener('pause', updateState);
+        audio.addEventListener('ended', updateState);
+        audio.addEventListener('timeupdate', updateState);
+        audio.addEventListener('loadedmetadata', updateState);
+        wave.on('ready', updateState);
+        updateState();
+    };
+
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', () => bootWaveform());
+    } else {
+        bootWaveform();
+    }
 })();
 </script>
 <?php endif; ?>
