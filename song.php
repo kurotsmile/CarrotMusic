@@ -19,13 +19,19 @@ if ($pdo instanceof PDO && $songId !== '') {
             $relatedGenreIds = music_split_genres((string) ($song['genre'] ?? ''));
             $relatedConditions = [];
             $relatedParams = [$songId];
+            $songLang = trim((string) ($song['lang'] ?? ''));
             foreach ($relatedGenreIds as $genreIndex => $genreId) {
                 $relatedConditions[] = 'FIND_IN_SET(?, REPLACE(COALESCE(s.genre, \'\'), \' \', \'\')) > 0';
                 $relatedParams[] = $genreId;
             }
             $relatedConditions[] = 's.artist = ?';
             $relatedParams[] = (string) ($song['artist'] ?? '');
-            $relatedSongs = music_fetch_songs($pdo, 8, 's.id <> ? AND (' . implode(' OR ', $relatedConditions) . ')', $relatedParams);
+            $relatedWhere = 's.id <> ? AND (' . implode(' OR ', $relatedConditions) . ')';
+            if ($songLang !== '') {
+                $relatedWhere .= ' AND TRIM(COALESCE(s.lang, \'\')) = ?';
+                $relatedParams[] = $songLang;
+            }
+            $relatedSongs = music_fetch_songs($pdo, 14, $relatedWhere, $relatedParams);
         }
     } catch (Throwable $e) {
         $errorMessage = $e->getMessage();
@@ -45,17 +51,20 @@ $songGenreTags = music_split_genres((string) ($song['genre'] ?? ''));
 $songYear = trim((string) ($song['year'] ?? ''));
 $songLang = trim((string) ($song['lang'] ?? ''));
 $songCountryCode = '';
+$songCountryName = '';
 if ($songLang !== '' && $pdo instanceof PDO) {
     try {
-        $countryStmt = $pdo->prepare('SELECT lang_country FROM country WHERE lang_key = ? AND COALESCE(lang_country, "") <> "" ORDER BY id ASC LIMIT 1');
+        $countryStmt = $pdo->prepare('SELECT name, lang_country FROM country WHERE lang_key = ? AND COALESCE(lang_country, "") <> "" ORDER BY id ASC LIMIT 1');
         $countryStmt->execute([$songLang]);
-        $songCountryCode = strtoupper(trim((string) $countryStmt->fetchColumn()));
+        $countryRow = $countryStmt->fetch();
+        if (is_array($countryRow)) {
+            $songCountryCode = strtoupper(trim((string) ($countryRow['lang_country'] ?? '')));
+            $songCountryName = trim((string) ($countryRow['name'] ?? ''));
+        }
     } catch (Throwable $e) {
         $songCountryCode = '';
+        $songCountryName = '';
     }
-}
-if ($songCountryCode === '' && $songLang !== '') {
-    $songCountryCode = strtoupper($songLang);
 }
 $byArtist = $songArtists
     ? array_map(static fn(array $artist): array => [
@@ -89,7 +98,11 @@ music_render_header($title, $description, music_cover($song['avatar']));
                 <span><a class="genre-tag site-link" href="<?= music_h(music_genre_url($genreTag)) ?>"><?= music_h($genreTag) ?></a></span>
             <?php endforeach; ?>
             <?php if ($songYear !== ''): ?><span><a class="year-tag site-link" href="<?= music_h(music_song_year_url((int) $songYear)) ?>"><?= music_h($songYear) ?></a></span><?php endif; ?>
-            <?php if ($songLang !== ''): ?><span><a class="lang-tag site-link" href="<?= music_h(music_url('music_tourism.php?country=' . rawurlencode($songCountryCode))) ?>"><?= music_h($songLang) ?></a></span><?php endif; ?>
+            <?php if ($songLang !== '' && $songCountryCode !== ''): ?>
+                <span><a class="lang-tag site-link" href="<?= music_h(music_url('music_tourism.php?country=' . rawurlencode($songCountryCode))) ?>"><?= music_tourism_icon() ?><?= music_h($songCountryName !== '' ? $songCountryName : $songCountryCode) ?></a></span>
+            <?php elseif ($songLang !== ''): ?>
+                <span class="lang-tag"><?= music_tourism_icon() ?><?= music_h($songLang) ?></span>
+            <?php endif; ?>
             <span class="view-meta">
                 <svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M2.4 12s3.5-6.5 9.6-6.5 9.6 6.5 9.6 6.5-3.5 6.5-9.6 6.5S2.4 12 2.4 12Z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><circle cx="12" cy="12" r="2.7" fill="none" stroke="currentColor" stroke-width="1.8"/></svg>
                 <?= music_h(number_format($songViewCount)) ?> <?= music_h(music_label('label.views', 'views')) ?>
@@ -97,13 +110,12 @@ music_render_header($title, $description, music_cover($song['avatar']));
         </div>
         <div class="song-actions">
             <?php if (!empty($song['mp3'])): ?>
-                <button class="btn btn-primary" onclick="cr_player.play_emp(this)" cr-url="<?= music_h($song['mp3']) ?>" cr-name="<?= music_h($song['name']) ?>" cr-artist="<?= music_h($artistName) ?>" cr-avatar="<?= music_h(music_cover($song['avatar'])) ?>"><?= music_play_icon() ?><?= music_h(music_label('music.action.play_song', 'Phát bài hát')) ?></button>
-                <button class="btn" onclick="cr_player.add_emp(this)" cr-url="<?= music_h($song['mp3']) ?>" cr-name="<?= music_h($song['name']) ?>" cr-artist="<?= music_h($artistName) ?>" cr-avatar="<?= music_h(music_cover($song['avatar'])) ?>"><?= music_h(music_label('music.action.add_playlist', 'Thêm playlist')) ?></button>
+                <button class="btn" onclick="cr_player.add_emp(this)" cr-url="<?= music_h($song['mp3']) ?>" cr-name="<?= music_h($song['name']) ?>" cr-artist="<?= music_h($artistName) ?>" cr-avatar="<?= music_h(music_cover($song['avatar'])) ?>"><?= music_h(music_label('music.action.add_to_playlist', 'Thêm playlist')) ?></button>
             <?php endif; ?>
             <?php if ($canDownload): ?>
                 <a class="btn" href="<?= music_h($song['mp3']) ?>" download><?= music_h(music_label('music.action.download_mp3', 'Tải MP3')) ?></a>
             <?php elseif (!empty($song['mp3']) && $paypalConfig['enabled']): ?>
-                <a class="btn" href="<?= music_h(music_url('paypal-create.php?id=' . rawurlencode($song['id']))) ?>"><?= music_h(music_label('music.action.buy_download', 'Mua tải MP3')) ?> · <?= music_h(number_format($price, 2) . ' ' . $paypalConfig['currency']) ?></a>
+                <a class="btn song-buy-btn" href="<?= music_h(music_url('paypal-create.php?id=' . rawurlencode($song['id']))) ?>"><?= music_h(music_label('music.action.buy_download', 'Buy MP3 downloads')) ?> · <?= music_h(number_format($price, 2) . ' ' . $paypalConfig['currency']) ?></a>
             <?php endif; ?>
             <?php if (!empty($song['link_ytb'])): ?>
                 <a class="btn" href="<?= music_h($song['link_ytb']) ?>" target="_blank" rel="noopener noreferrer">
@@ -115,11 +127,10 @@ music_render_header($title, $description, music_cover($song['avatar']));
         </div>
         <?php if (!empty($song['mp3'])): ?>
             <div class="wave-box">
-                <button class="wave-play" type="button" aria-label="<?= music_h(music_label('music.action.play_song', 'Phát bài hát')) ?>">
+                <button class="wave-play" type="button" aria-label="<?= music_h(music_label('music.action.play', 'Phát bài hát')) ?>">
                     <?= music_play_icon() ?>
                 </button>
                 <div class="wave-main">
-                    <div class="wave-title"><?= music_h(music_label('music.song.waveform', 'Sóng âm thanh')) ?></div>
                     <div id="song_waveform" class="song-waveform"></div>
                 </div>
             </div>
@@ -146,7 +157,7 @@ music_render_header($title, $description, music_cover($song['avatar']));
 
 <?php if ($relatedSongs): ?>
 <section class="section">
-    <div class="section-head"><div><h2><?= music_h(music_label('music.section.related_songs', 'Bài liên quan')) ?></h2><p><?= music_h(music_label('music.section.related_songs_intro', 'Tiếp tục khám phá những giai điệu có cùng cảm xúc.')) ?></p></div></div>
+    <div class="section-head"><div><h2><?= music_h(music_label('music.related_songs', 'Bài liên quan')) ?></h2><p><?= music_h(music_label('music.related_songs_intro', 'Tiếp tục khám phá những giai điệu có cùng cảm xúc.')) ?></p></div></div>
     <div class="grid">
         <?php foreach ($relatedSongs as $related): ?>
             <article class="song-card">
@@ -156,7 +167,7 @@ music_render_header($title, $description, music_cover($song['avatar']));
                     <div class="song-meta"><?= music_h($related['artist_names'] ?: $related['artist']) ?></div>
                     <div class="song-card-actions">
                         <button class="btn btn-primary" onclick="cr_player.play_emp(this)" cr-url="<?= music_h($related['mp3']) ?>" cr-name="<?= music_h($related['name']) ?>" cr-artist="<?= music_h($related['artist_names'] ?: $related['artist']) ?>" cr-avatar="<?= music_h(music_cover($related['avatar'])) ?>"><?= music_play_icon() ?><?= music_h(music_label('music.action.play', 'Phát')) ?></button>
-                        <button class="icon-btn" title="<?= music_h(music_label('music.action.add_to_playlist', 'Thêm vào playlist')) ?>" onclick="cr_player.add_emp(this)" cr-url="<?= music_h($related['mp3']) ?>" cr-name="<?= music_h($related['name']) ?>" cr-artist="<?= music_h($related['artist_names'] ?: $related['artist']) ?>" cr-avatar="<?= music_h(music_cover($related['avatar'])) ?>"><i class="fas fa-plus"></i></button>
+                        <button class="icon-btn" title="<?= music_h(music_label('music.action.add_to_playlist', 'Add to playlist')) ?>" onclick="cr_player.add_emp(this)" cr-url="<?= music_h($related['mp3']) ?>" cr-name="<?= music_h($related['name']) ?>" cr-artist="<?= music_h($related['artist_names'] ?: $related['artist']) ?>" cr-avatar="<?= music_h(music_cover($related['avatar'])) ?>"><i class="fas fa-plus"></i></button>
                     </div>
                 </div>
             </article>

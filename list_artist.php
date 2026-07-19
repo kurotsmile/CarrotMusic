@@ -60,7 +60,7 @@ music_render_header(
 <section class="section">
     <div class="section-head">
         <div>
-            <h2><?= music_h(music_label('music.section.all_artists', 'Tất cả nghệ sĩ')) ?></h2>
+            <h2><?= music_h(music_label('music.all_artists', 'All artists')) ?></h2>
             <p><?= number_format($totalArtists) ?> <?= music_h(music_label('music.label.artists', 'nghệ sĩ')) ?></p>
         </div>
     </div>

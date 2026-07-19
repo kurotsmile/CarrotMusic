@@ -23,7 +23,7 @@ if ($pdo instanceof PDO) {
         $cacheKey = music_cache_key('music_home', [
             'lang' => current_lang_key(),
             'q' => $searchQuery !== '' ? sha1($searchQuery) : '',
-            'view' => 'genre_cards_timeline_v2',
+            'view' => 'genre_cards_timeline_v4_24_new_songs_18_popular',
         ]);
         $cachedHome = music_cache_get($cacheKey, $cacheTtl);
 
@@ -47,9 +47,9 @@ if ($pdo instanceof PDO) {
                      ))
                 ', [$searchValue, $searchValue, $searchValue, $searchValue, $searchValue, $searchValue]);
             } else {
-                $songs = music_fetch_songs($pdo, 21);
+                $songs = music_fetch_songs($pdo, 24);
                 try {
-                    $popularSongs = music_fetch_popular_songs($pdo, 14);
+                    $popularSongs = music_fetch_popular_songs($pdo, 18);
                 } catch (Throwable $popularError) {
                     error_log('music_fetch_popular_songs failed: ' . $popularError->getMessage());
                     $popularSongs = [];
@@ -150,13 +150,13 @@ $heroSlides = [
 <section class="hero">
     <div class="hero-content">
         <p class="eyebrow"><?= music_h(music_label('music.hero.eyebrow', 'Không gian âm nhạc của bạn')) ?></p>
-        <h1><?= music_h(music_label('music.hero.title', 'Nghe nhạc online, tạo playlist và tải MP3.')) ?></h1>
+        <h1><?= music_h(music_label('music.hero.title', 'Listen to music online, create playlists, and download MP3s.')) ?></h1>
         <p><?= music_h(music_label('music.hero.description', 'Tìm bài hát hợp tâm trạng, nghe ngay trong trình phát và lưu lại những giai điệu bạn muốn quay lại nhiều lần.')) ?></p>
         <div class="hero-stats" aria-label="<?= music_h(music_label('aria.music_stats', 'Music statistics')) ?>">
-            <a class="hero-stat" href="<?= music_h(music_url('index.php')) ?>">
+            <div class="hero-stat hero-stat--static">
                 <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 18V5l10-2v13" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><circle cx="6" cy="18" r="3" fill="none" stroke="currentColor" stroke-width="1.8"/><circle cx="16" cy="16" r="3" fill="none" stroke="currentColor" stroke-width="1.8"/></svg>
                 <span><strong><?= number_format($stats['songs']) ?></strong><small><?= music_h(music_label('music.label.songs', 'bài hát')) ?></small></span>
-            </a>
+            </div>
             <a class="hero-stat" href="<?= music_h(music_url('list_artist.php')) ?>">
                 <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M16 7a4 4 0 1 1-8 0 4 4 0 0 1 8 0ZM4 21a8 8 0 0 1 16 0" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
                 <span><strong><?= number_format($stats['artists']) ?></strong><small><?= music_h(music_label('music.label.artists', 'nghệ sĩ')) ?></small></span>
@@ -166,12 +166,6 @@ $heroSlides = [
                 <span><strong><?= number_format($stats['genres']) ?></strong><small><?= music_h(music_label('music.label.genres', 'thể loại')) ?></small></span>
             </a>
         </div>
-        <?php if ($featured): ?>
-            <div class="hero-actions">
-                <button class="btn btn-primary" onclick="cr_player.play_emp(this)" cr-url="<?= music_h($featured['mp3']) ?>" cr-name="<?= music_h($featured['name']) ?>" cr-artist="<?= music_h($featured['artist_names'] ?: $featured['artist']) ?>" cr-avatar="<?= music_h(music_cover($featured['avatar'])) ?>"><?= music_play_icon() ?><?= music_h(music_label('music.action.play_featured', 'Phát nổi bật')) ?></button>
-                <a class="btn btn-ghost site-link" href="<?= music_h(music_song_url($featured['id'])) ?>"><?= music_h(music_label('music.action.view_detail', 'Xem chi tiết')) ?></a>
-            </div>
-        <?php endif; ?>
     </div>
     <div class="hero-slider" aria-label="<?= music_h(music_label('aria.hero_slider', 'Featured music banners')) ?>">
         <div class="hero-slider-track">
@@ -207,8 +201,8 @@ $heroSlides = [
 <section class="section">
     <div class="section-head">
         <div>
-            <h2><?= music_h($searchQuery !== '' ? music_label('music.section.search_results', 'Kết quả tìm kiếm') : music_label('music.section.new_songs', 'Bài hát mới')) ?></h2>
-            <p><?= music_h($searchQuery !== '' ? sprintf(music_label('music.section.search_hint', 'Từ khóa: "%s"'), $searchQuery) : music_label('music.section.new_songs_intro', 'Chọn một bài để nghe ngay hoặc lưu vào danh sách yêu thích của bạn.')) ?></p>
+            <h2><?= music_h($searchQuery !== '' ? music_label('music.section.search_results', 'Kết quả tìm kiếm') : music_label('music.new_songs', 'New song')) ?></h2>
+            <p><?= music_h($searchQuery !== '' ? sprintf(music_label('music.section.search_hint', 'Từ khóa: "%s"'), $searchQuery) : music_label('music.new_songs_intro', 'Chọn một bài để nghe ngay hoặc lưu vào danh sách yêu thích của bạn.')) ?></p>
         </div>
     </div>
     <?php if ($errorMessage): ?><div class="empty"><?= music_h($errorMessage) ?></div><?php endif; ?>
@@ -241,16 +235,27 @@ $heroSlides = [
         </div>
     </div>
     <div class="grid">
-        <?php foreach ($popularSongs as $song): ?>
+        <?php foreach ($popularSongs as $rankIndex => $song): ?>
+            <?php $songRank = $rankIndex + 1; ?>
             <article class="song-card">
-                <a class="site-link" href="<?= music_h(music_song_url($song['id'])) ?>">
+                <a class="site-link song-card-cover" href="<?= music_h(music_song_url($song['id'])) ?>">
                     <img src="<?= music_h(music_cover($song['avatar'])) ?>" alt="<?= music_h($song['name']) ?>">
+                    <?php if ($songRank <= 10): ?>
+                        <?php
+                        $rankClass = $songRank <= 3 ? ' is-top-' . $songRank : '';
+                        $rankIcon = $songRank === 1 ? 'fa-crown' : ($songRank === 2 ? 'fa-medal' : ($songRank === 3 ? 'fa-award' : ''));
+                        ?>
+                        <span class="song-rank-badge<?= $rankClass ?>" aria-label="<?= music_h(sprintf(music_label('aria.song_rank', 'Rank %s'), (string) $songRank)) ?>">
+                            <?php if ($rankIcon !== ''): ?><i class="fas <?= music_h($rankIcon) ?>" aria-hidden="true"></i><?php endif; ?>
+                            <span>#<?= number_format($songRank) ?></span>
+                        </span>
+                    <?php endif; ?>
                 </a>
                 <div class="song-card-body">
                     <a class="song-title site-link" href="<?= music_h(music_song_url($song['id'])) ?>"><?= music_h($song['name']) ?></a>
                     <div class="song-meta">
                         <?= music_h($song['artist_names'] ?: $song['artist'] ?: music_label('music.label.unknown_artist', 'Unknown artist')) ?>
-                        · <?= number_format((int) ($song['view_count'] ?? 0)) ?> <?= music_h(music_label('music.label.views', 'lượt nghe')) ?>
+                        · <?= number_format((int) ($song['view_count'] ?? 0)) ?> <?= music_h(music_label('music.listen.count', 'lượt nghe')) ?>
                     </div>
                     <div class="song-card-actions">
                         <button class="btn btn-primary" onclick="cr_player.play_emp(this)" cr-url="<?= music_h($song['mp3']) ?>" cr-name="<?= music_h($song['name']) ?>" cr-artist="<?= music_h($song['artist_names'] ?: $song['artist']) ?>" cr-avatar="<?= music_h(music_cover($song['avatar'])) ?>"><?= music_play_icon() ?><?= music_h(music_label('music.action.play', 'Phát')) ?></button>
@@ -265,8 +270,8 @@ $heroSlides = [
 
 <section class="section" id="genres">
     <div class="section-head">
-        <div><h2><?= music_h(music_label('music.section.genres', 'Thể loại')) ?></h2><p><?= music_h(music_label('music.section.genres_intro', 'Khám phá nhạc theo màu sắc và mood.')) ?></p></div>
-        <a class="section-view-all" href="<?= music_h(music_url('list_genre.php')) ?>"><?= music_h(music_label('music.action.view_all', 'Xem tất cả')) ?><i class="fas fa-arrow-right"></i></a>
+        <div><h2><?= music_h(music_label('music.label.genres', 'Thể loại')) ?></h2><p><?= music_h(music_label('music.genres_intro', 'Khám phá nhạc theo màu sắc và mood.')) ?></p></div>
+        <a class="section-view-all" href="<?= music_h(music_url('list_genre.php')) ?>"><?= music_h(music_label('action.view_all', 'Xem tất cả')) ?><i class="fas fa-arrow-right"></i></a>
     </div>
     <div class="genre-grid">
         <?php foreach ($genres as $genre): ?>
@@ -295,8 +300,8 @@ $heroSlides = [
 
 <section class="section" id="artists">
     <div class="section-head">
-        <div><h2><?= music_h(music_label('music.section.artists', 'Nghệ sĩ')) ?></h2><p><?= music_h(music_label('music.section.artists_intro', 'Gặp gỡ những giọng ca và tác giả đứng sau các bài hát bạn yêu thích.')) ?></p></div>
-        <a class="section-view-all" href="<?= music_h(music_url('list_artist.php')) ?>"><?= music_h(music_label('music.action.view_all', 'Xem tất cả')) ?><i class="fas fa-arrow-right"></i></a>
+        <div><h2><?= music_h(music_label('music.label.artists', 'Nghệ sĩ')) ?></h2><p><?= music_h(music_label('music.artists_intro', 'Gặp gỡ những giọng ca và tác giả đứng sau các bài hát bạn yêu thích.')) ?></p></div>
+        <a class="section-view-all" href="<?= music_h(music_url('list_artist.php')) ?>"><?= music_h(music_label('action.view_all', 'Xem tất cả')) ?><i class="fas fa-arrow-right"></i></a>
     </div>
     <div class="artist-grid">
         <?php foreach ($artists as $artist): ?>
@@ -312,8 +317,8 @@ $heroSlides = [
 <section class="section" id="timeline">
     <div class="section-head">
         <div>
-            <h2><?= music_h(music_label('music.section.timeline', 'Dòng thời gian và hoài niệm')) ?></h2>
-            <p><?= music_h(music_label('music.section.timeline_intro', 'Lướt qua từng năm phát hành và tìm lại những giai điệu gắn với ký ức của bạn.')) ?></p>
+            <h2><?= music_h(music_label('music.timeline', 'Dòng thời gian và hoài niệm')) ?></h2>
+            <p><?= music_h(music_label('music.timeline_intro', 'Lướt qua từng năm phát hành và tìm lại những giai điệu gắn với ký ức của bạn.')) ?></p>
         </div>
         <div class="timeline-controls" aria-label="<?= music_h(music_label('aria.timeline_controls', 'Timeline controls')) ?>">
             <button type="button" class="timeline-btn" data-timeline-prev aria-label="<?= music_h(music_label('aria.previous_page', 'Previous page')) ?>"><i class="fas fa-chevron-left"></i></button>

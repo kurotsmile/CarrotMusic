@@ -1,5 +1,10 @@
 <?php
-
+if (!defined('CARROT_SITE_KEY')) {
+    define('CARROT_SITE_KEY', 'CarrotMusic');
+}
+if (!defined('CARROT_SITE_ALIASES')) {
+    define('CARROT_SITE_ALIASES', ['CarrotMusic', 'Music', 'music.carrot28.com']);
+}
 require_once __DIR__ . '/../../CarrotHome/config/database.php';
 require_once __DIR__ . '/../../CarrotHome/includes/functions.php';
 require_once __DIR__ . '/visit_tracker.php';
@@ -127,6 +132,11 @@ function music_cache_clear(string $prefix = ''): int
 function music_play_icon(): string
 {
     return '<svg class="btn-icon" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="currentColor"><path d="M8 5.14v13.72c0 .76.84 1.22 1.48.81l10.78-6.86a.96.96 0 0 0 0-1.62L9.48 4.33A.96.96 0 0 0 8 5.14Z"/></svg>';
+}
+
+function music_tourism_icon(): string
+{
+    return '<svg class="tourism-icon" width="15" height="15" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M21.2 3.45c.5.5.46 1.34-.09 1.88l-4.94 4.94 2.23 7.88-1.55 1.55-3.74-6.32-3.22 3.22.3 2.33-1.27 1.27-1.12-3.32-3.32-1.12 1.27-1.27 2.33.3 3.22-3.22-6.32-3.74L6.53 6.3l7.88 2.23 4.94-4.94c.54-.55 1.38-.59 1.85-.14Z" fill="currentColor"/></svg>';
 }
 
 function music_detail_action_buttons(string $title = '', string $url = ''): string
@@ -278,7 +288,13 @@ function music_footer_sites(?PDO $pdo): array
     }
 
     try {
-        $stmt = $pdo->query("SELECT name, url, logo, description FROM sites WHERE COALESCE(url, '') <> '' ORDER BY sort_order ASC, name ASC LIMIT 10");
+        static $hasStatus = null;
+        if ($hasStatus === null) {
+            $columns = $pdo->query('SHOW COLUMNS FROM sites')->fetchAll(PDO::FETCH_COLUMN);
+            $hasStatus = in_array('status', $columns, true);
+        }
+        $statusWhere = $hasStatus ? " AND COALESCE(status, 'active') = 'active'" : '';
+        $stmt = $pdo->query("SELECT name, url, logo, description FROM sites WHERE COALESCE(url, '') <> ''{$statusWhere} ORDER BY sort_order ASC, name ASC LIMIT 10");
         return $stmt ? $stmt->fetchAll(PDO::FETCH_ASSOC) : [];
     } catch (Throwable $e) {
         return [];
@@ -480,6 +496,16 @@ function music_render_header(string $title, string $description = '', string $im
     $searchQuery = trim((string) ($_GET['q'] ?? ''));
     $lang = current_lang_key();
     $languageOptions = music_language_options($GLOBALS['pdo'] ?? null);
+    $musicUser = null;
+    if (!empty($_SESSION['home_user_id']) && ($GLOBALS['pdo'] ?? null) instanceof PDO) {
+        try {
+            $userStmt = $GLOBALS['pdo']->prepare('SELECT id, name, email, avatar FROM users WHERE id = ? LIMIT 1');
+            $userStmt->execute([(int) $_SESSION['home_user_id']]);
+            $musicUser = $userStmt->fetch() ?: null;
+        } catch (Throwable $e) {
+            $musicUser = null;
+        }
+    }
     $styleVersion = is_file(__DIR__ . '/../style.css') ? (string) filemtime(__DIR__ . '/../style.css') : '1';
     ?>
 <!doctype html>
@@ -500,9 +526,12 @@ function music_render_header(string $title, string $description = '', string $im
     <link rel="manifest" href="<?= music_h(music_url('favicon/site.webmanifest')) ?>">
     <link rel="shortcut icon" href="<?= music_h(music_url('favicon/favicon.ico')) ?>">
     <link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://unpkg.com/tippy.js@6/dist/tippy.css">
     <link rel="stylesheet" href="<?= music_h(music_url('style.css?v=' . $styleVersion)) ?>">
     <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    <script src="https://unpkg.com/@popperjs/core@2"></script>
+    <script src="https://unpkg.com/tippy.js@6"></script>
     <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css">
 </head>
@@ -510,7 +539,7 @@ function music_render_header(string $title, string $description = '', string $im
 <header class="site-header">
     <a class="brand site-link" href="<?= music_h(music_url('index.php')) ?>">
         <span class="brand-mark">♪</span>
-        <span><strong>CarrotMusic</strong><small><?= music_h(music_label('music.brand_tagline', 'Nghe nhạc mỗi ngày')) ?></small></span>
+        <span><strong>CarrotMusic</strong><small><?= music_h(music_label('music.brand_tagline', 'Listen to music every day')) ?></small></span>
     </a>
     <form class="header-search" method="get" action="<?= music_h(music_url('index.php')) ?>">
         <input name="q" type="search" value="<?= music_h($searchQuery) ?>" placeholder="<?= music_h(music_label('music.search_placeholder', 'Tìm bài hát hoặc nghệ sĩ')) ?>">
@@ -518,24 +547,47 @@ function music_render_header(string $title, string $description = '', string $im
     </form>
     <nav>
         <span class="header-links">
-            <a class="site-link" href="<?= music_h(music_url('index.php')) ?>"><?= music_h(music_label('music.nav.explore', 'Explore')) ?></a>
-            <a class="site-link" href="<?= music_h(music_url('index.php#genres')) ?>"><?= music_h(music_label('music.nav.genres', 'Genres')) ?></a>
-            <a class="site-link" href="<?= music_h(music_url('index.php#artists')) ?>"><?= music_h(music_label('music.nav.artists', 'Artists')) ?></a>
-            <a class="site-link" href="<?= music_h(music_url('music_tourism.php')) ?>"><?= music_h(music_label('music.nav.tourism', 'Du lịch')) ?></a>
+            <a class="site-link" href="<?= music_h(music_url('index.php')) ?>"><?= music_h(music_label('nav.explore', 'Explore')) ?></a>
+            <a class="site-link" href="<?= music_h(music_url('index.php#genres')) ?>"><?= music_h(music_label('music.label.genres', 'Genres')) ?></a>
+            <a class="site-link" href="<?= music_h(music_url('index.php#artists')) ?>"><?= music_h(music_label('music.label.artists', 'Artists')) ?></a>
+            <a class="site-link" href="<?= music_h(music_url('music_tourism.php')) ?>"><?= music_h(music_label('music.label.tourism', 'Du lịch')) ?></a>
         </span>
-        <?php if ($languageOptions): ?>
-            <span class="header-language">
-                <select class="music-language-select" aria-label="<?= music_h(music_label('aria.choose_language', 'Choose language')) ?>">
-                    <?php foreach ($languageOptions as $language): ?>
-                        <?php $languageKey = (string) ($language['lang_key'] ?? ''); ?>
-                        <?php if ($languageKey === '') continue; ?>
-                        <option value="<?= music_h($languageKey) ?>" data-icon="<?= music_h($language['icon'] ?? '') ?>" <?= $languageKey === $lang ? 'selected' : '' ?>>
-                            <?= music_h(($language['name'] ?? $languageKey) . ' · ' . strtoupper($languageKey)) ?>
-                        </option>
-                    <?php endforeach; ?>
-                </select>
+        <span class="header-tools">
+            <?php if ($languageOptions): ?>
+                <span class="header-language">
+                    <select class="music-language-select" aria-label="<?= music_h(music_label('aria.choose_language', 'Choose language')) ?>">
+                        <?php foreach ($languageOptions as $language): ?>
+                            <?php $languageKey = (string) ($language['lang_key'] ?? ''); ?>
+                            <?php if ($languageKey === '') continue; ?>
+                            <option value="<?= music_h($languageKey) ?>" data-icon="<?= music_h($language['icon'] ?? '') ?>" <?= $languageKey === $lang ? 'selected' : '' ?>>
+                                <?= music_h(($language['name'] ?? $languageKey) . ' · ' . strtoupper($languageKey)) ?>
+                            </option>
+                        <?php endforeach; ?>
+                    </select>
+                </span>
+            <?php endif; ?>
+            <span class="header-auth">
+                <?php if ($musicUser): ?>
+                    <?php
+                    $musicUserName = trim((string) ($musicUser['name'] ?? '')) ?: (string) ($musicUser['email'] ?? '');
+                    $musicUserAvatar = trim((string) ($musicUser['avatar'] ?? ''));
+                    $musicUserInitial = strtoupper(substr($musicUserName, 0, 1) ?: 'U');
+                    ?>
+                    <a class="music-profile-button" href="<?= music_h(music_url('profile.php')) ?>" aria-label="<?= music_h(music_label('nav.profile', 'Profile')) ?>">
+                        <?php if ($musicUserAvatar !== ''): ?>
+                            <img src="<?= music_h($musicUserAvatar) ?>" alt="">
+                        <?php else: ?>
+                            <span><?= music_h($musicUserInitial) ?></span>
+                        <?php endif; ?>
+                    </a>
+                <?php else: ?>
+                    <button class="music-login-button js-music-login" type="button" aria-label="<?= music_h(music_label('nav.login', 'Login')) ?>">
+                        <i class="fas fa-user-circle" aria-hidden="true"></i>
+                        <?= music_h(music_label('nav.login', 'Login')) ?>
+                    </button>
+                <?php endif; ?>
             </span>
-        <?php endif; ?>
+        </span>
     </nav>
 </header>
 <main id="app-content">
@@ -546,16 +598,16 @@ function music_render_footer(): void
 {
     $footerSites = music_footer_sites($GLOBALS['pdo'] ?? null);
     $footerColumns = [
-        music_label('music.footer.organization', 'Organization') => [
-            'about' => ['music.footer.about', 'About'],
-            'services' => ['music.footer.services', 'Services'],
-            'contact' => ['music.footer.contact', 'Contact'],
+        music_label('footer.company', 'Organization') => [
+            'about' => ['footer.about', 'About'],
+            'services' => ['footer.services', 'Services'],
+            'contact' => ['footer.contact', 'Contact'],
         ],
-        music_label('music.footer.legal', 'Legal') => [
-            'privacy-policy' => ['music.footer.privacy_policy', 'Privacy Policy'],
-            'terms-of-service' => ['music.footer.terms_of_service', 'Terms of Service'],
-            'cookie-policy' => ['music.footer.cookie_policy', 'Cookie Policy'],
-            'disclaimer' => ['music.footer.disclaimer', 'Disclaimer'],
+        music_label('footer.legal', 'Legal') => [
+            'privacy-policy' => ['footer.privacy_policy', 'Privacy Policy'],
+            'terms-of-service' => ['footer.terms_of_service', 'Terms of Service'],
+            'cookie-policy' => ['footer.cookie_policy', 'Cookie Policy'],
+            'disclaimer' => ['footer.disclaimer', 'Disclaimer'],
         ],
     ];
     ?>
@@ -620,6 +672,19 @@ function music_render_footer(): void
 cr_player.path = '<?= music_h(music_url('cr_player')) ?>';
 cr_player.onCreate('theme_basic_bottom');
 
+const musicOauthError = new URLSearchParams(window.location.search).get('oauth_error');
+if (musicOauthError) {
+    Swal.fire({
+        icon: 'error',
+        title: <?= json_encode(music_label('login.error_title', 'Không thể đăng nhập'), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>,
+        text: musicOauthError,
+        confirmButtonColor: '#ff6a00',
+    });
+    const cleanUrl = new URL(window.location.href);
+    cleanUrl.searchParams.delete('oauth_error');
+    window.history.replaceState(null, document.title, cleanUrl.toString());
+}
+
 const musicCurrentShareUrl = (button) => {
     const rawUrl = button?.dataset.shareUrl || window.location.href;
     try {
@@ -647,6 +712,38 @@ const musicCopyText = async (text) => {
 };
 
 document.addEventListener('click', async (event) => {
+    const loginButton = event.target.closest('.js-music-login');
+    if (loginButton) {
+        Swal.fire({
+            title: <?= json_encode(music_label('login.title', 'Login'), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>,
+            html: `
+                <div class="music-login-popup">
+                    <p><?= music_h(music_label('login.intro', 'Sign in to your Carrot account.')) ?></p>
+                    <div class="music-login-providers">
+                        <a href="<?= music_h(music_url('social-login.php?provider=google')) ?>" aria-label="Google">
+                            <svg viewBox="0 0 24 24" aria-hidden="true"><path fill="#4285f4" d="M21.6 12.2c0-.7-.1-1.3-.2-1.8H12v3.5h5.4c-.2 1.1-.9 2.1-1.9 2.7v2.2h3c1.8-1.6 3.1-3.9 3.1-6.6Z"/><path fill="#34a853" d="M12 22c2.7 0 5-.9 6.6-2.5l-3-2.2c-.8.5-1.9.9-3.6.9-2.6 0-4.8-1.7-5.6-4.1H3.3v2.3C4.9 19.7 8.2 22 12 22Z"/><path fill="#fbbc05" d="M6.4 14.1c-.2-.6-.3-1.3-.3-2.1s.1-1.4.3-2.1V7.6H3.3C2.5 8.9 2.1 10.4 2.1 12s.4 3.1 1.2 4.4l3.1-2.3Z"/><path fill="#ea4335" d="M12 5.8c1.5 0 2.8.5 3.8 1.5l2.8-2.8C17 2.9 14.7 2 12 2 8.2 2 4.9 4.3 3.3 7.6l3.1 2.3c.8-2.4 3-4.1 5.6-4.1Z"/></svg>
+                            <span>Google</span>
+                        </a>
+                        <a href="<?= music_h(music_url('social-login.php?provider=twitter_x')) ?>" aria-label="X">
+                            <svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M18.3 2.8h3.3l-7.2 8.2 8.5 10.2h-6.6l-5.2-6.2-6 6.2H1.8l7.7-8.7L1.4 2.8h6.8l4.7 5.7 5.4-5.7Zm-1.2 16.6h1.8L7.2 4.5H5.3l11.8 14.9Z"/></svg>
+                            <span>X</span>
+                        </a>
+                        <a href="<?= music_h(music_url('social-login.php?provider=github')) ?>" aria-label="GitHub">
+                            <svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M12 2a10 10 0 0 0-3.2 19.5c.5.1.7-.2.7-.5v-1.8c-2.9.6-3.5-1.2-3.5-1.2-.5-1.1-1.1-1.4-1.1-1.4-.9-.6.1-.6.1-.6 1 0 1.5 1 1.5 1 .9 1.5 2.3 1.1 2.9.8.1-.6.3-1.1.6-1.3-2.3-.3-4.7-1.1-4.7-5A3.9 3.9 0 0 1 6.4 8.7c-.1-.3-.5-1.3.1-2.7 0 0 .8-.3 2.8 1a9.6 9.6 0 0 1 5.2 0c2-1.3 2.8-1 2.8-1 .6 1.4.2 2.4.1 2.7a3.9 3.9 0 0 1 1.1 2.8c0 3.9-2.4 4.7-4.7 5 .4.3.7.9.7 1.8V21c0 .3.2.6.7.5A10 10 0 0 0 12 2Z"/></svg>
+                            <span>GitHub</span>
+                        </a>
+                    </div>
+                    <a class="music-login-email" href="../CarrotHome/login.php"><?= music_h(music_label('login.with_email', 'Login with email')) ?></a>
+                </div>
+            `,
+            showConfirmButton: false,
+            showCloseButton: true,
+            customClass: {popup: 'music-login-swal'},
+            background: '#fff7f2',
+        });
+        return;
+    }
+
     const shareButton = event.target.closest('.js-music-share');
     if (shareButton) {
         const shareUrl = musicCurrentShareUrl(shareButton);
@@ -746,6 +843,23 @@ if (window.jQuery && jQuery.fn.select2) {
         const url = new URL(window.location.href);
         url.searchParams.set('lang', select.value);
         window.location.href = url.toString();
+    });
+}
+
+if (window.tippy) {
+    document.querySelectorAll('.icon-btn[title]').forEach((item) => {
+        item.dataset.tooltipLabel = item.getAttribute('title') || '';
+        item.removeAttribute('title');
+    });
+    tippy('button[aria-label], a[aria-label], .icon-btn[data-tooltip-label]', {
+        content(reference) {
+            return reference.getAttribute('aria-label') || reference.dataset.tooltipLabel || reference.getAttribute('title') || '';
+        },
+        theme: 'carrot',
+        placement: 'bottom',
+        delay: [120, 40],
+        touch: ['hold', 450],
+        ignoreAttributes: true,
     });
 }
 </script>

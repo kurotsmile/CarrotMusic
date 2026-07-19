@@ -163,7 +163,7 @@ foreach ($countries as $country) {
     <?php else: ?>
         <div class="tourism-result-grid">
             <div>
-                <h3><?= music_h(music_label('music.section.songs', 'Bài hát')) ?></h3>
+                <h3><?= music_h(music_label('music.label.songs', 'Bài hát')) ?></h3>
                 <?php if (!$songs): ?>
                     <div class="empty"><?= music_h(music_label('music.empty.songs_country', 'Chưa có bài hát cho điểm đến này.')) ?></div>
                 <?php else: ?>
@@ -187,7 +187,7 @@ foreach ($countries as $country) {
                 <?php endif; ?>
             </div>
             <div>
-                <h3><?= music_h(music_label('music.section.artists', 'Nghệ sĩ')) ?></h3>
+                <h3><?= music_h(music_label('music.label.artists', 'Nghệ sĩ')) ?></h3>
                 <?php if (!$artists): ?>
                     <div class="empty"><?= music_h(music_label('music.empty.artists_country', 'Chưa có nghệ sĩ cho điểm đến này.')) ?></div>
                 <?php else: ?>

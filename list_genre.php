@@ -61,7 +61,7 @@ music_render_header(
 <section class="section">
     <div class="section-head">
         <div>
-            <h2><?= music_h(music_label('music.section.all_genres', 'Tất cả thể loại')) ?></h2>
+            <h2><?= music_h(music_label('music.all_genres', 'Tất cả thể loại')) ?></h2>
             <p><?= number_format($totalGenres) ?> <?= music_h(music_label('music.label.genres', 'thể loại')) ?></p>
         </div>
     </div>

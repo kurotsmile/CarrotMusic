@@ -82,7 +82,7 @@ music_render_header(
             <h2><?= music_h($yearTitle) ?></h2>
             <p><?= number_format($totalSongs) ?> <?= music_h(music_label('music.label.songs', 'bài hát')) ?> · <?= music_h(music_label('music.year.intro', 'Một lát cắt âm nhạc để nghe lại những giai điệu của năm này.')) ?></p>
         </div>
-        <a class="section-view-all" href="<?= music_h(music_url('index.php#timeline')) ?>"><i class="fas fa-arrow-left"></i><?= music_h(music_label('music.action.back_timeline', 'Dòng thời gian')) ?></a>
+        <a class="section-view-all" href="<?= music_h(music_url('index.php#timeline')) ?>"><i class="fas fa-arrow-left"></i><?= music_h(music_label('music.timeline', 'Dòng thời gian')) ?></a>
     </div>
     <?php if ($errorMessage): ?><div class="empty"><?= music_h($errorMessage) ?></div><?php endif; ?>
     <?= music_render_pagination($currentPage, $totalPages, static fn(int $page): string => music_song_year_url($year) . '&page_no=' . $page) ?>

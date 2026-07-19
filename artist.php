@@ -56,6 +56,23 @@ $description = music_excerpt($artist['description'] ?? '', 155);
 if ($description === '') {
     $description = sprintf(music_label('music.artist.default_description', 'Nghe các bài hát của %s trên CarrotMusic.'), (string) $artist['name']);
 }
+$artistLangKey = trim((string) ($artist['lang_key'] ?? ''));
+$artistCountryCode = '';
+$artistCountryName = '';
+if ($pdo instanceof PDO && $artistLangKey !== '') {
+    try {
+        $countryStmt = $pdo->prepare('SELECT name, lang_country FROM country WHERE lang_key = ? AND COALESCE(lang_country, "") <> "" ORDER BY id ASC LIMIT 1');
+        $countryStmt->execute([$artistLangKey]);
+        $countryRow = $countryStmt->fetch();
+        if (is_array($countryRow)) {
+            $artistCountryCode = strtoupper(trim((string) ($countryRow['lang_country'] ?? '')));
+            $artistCountryName = trim((string) ($countryRow['name'] ?? ''));
+        }
+    } catch (Throwable $e) {
+        $artistCountryCode = '';
+        $artistCountryName = '';
+    }
+}
 music_render_header($title, $description, music_cover($artist['avatar']));
 ?>
 <article class="detail">
@@ -64,7 +81,11 @@ music_render_header($title, $description, music_cover($artist['avatar']));
         <p class="eyebrow"><?= music_h(music_label('music.artist.eyebrow', 'Artist profile')) ?></p>
         <h1><?= music_h($artist['name']) ?></h1>
         <div class="detail-meta">
-            <span><?= music_h($artist['lang_key'] ?? 'vi') ?></span>
+            <?php if ($artistLangKey !== '' && $artistCountryCode !== ''): ?>
+                <span><a class="lang-tag site-link" href="<?= music_h(music_url('music_tourism.php?country=' . rawurlencode($artistCountryCode))) ?>"><?= music_tourism_icon() ?><?= music_h($artistCountryName !== '' ? $artistCountryName : $artistCountryCode) ?></a></span>
+            <?php elseif ($artistLangKey !== ''): ?>
+                <span class="lang-tag"><?= music_tourism_icon() ?><?= music_h($artistLangKey) ?></span>
+            <?php endif; ?>
             <span><?= number_format(count($songs)) ?> <?= music_h(music_label('music.label.songs', 'bài hát')) ?></span>
         </div>
         <div class="song-actions">
