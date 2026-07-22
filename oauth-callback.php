@@ -11,7 +11,7 @@ function music_oauth_json(array $payload, int $statusCode = 200): void
 
 function music_oauth_redirect_error(string $message): void
 {
-    header('Location: index.php?oauth_error=' . rawurlencode($message));
+    header('Location: ' . music_url_with_query(music_home_url(), ['oauth_error' => $message]));
     exit;
 }
 
@@ -261,7 +261,7 @@ try {
         throw new RuntimeException('Provider chưa được hỗ trợ.');
     }
 
-    header('Location: index.php');
+    header('Location: ' . music_home_url());
     exit;
 } catch (Throwable $e) {
     music_oauth_redirect_error($e->getMessage());

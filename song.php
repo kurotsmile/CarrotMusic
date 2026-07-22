@@ -40,16 +40,20 @@ if ($pdo instanceof PDO && $songId !== '') {
 
 if (!$song) {
     http_response_code(404);
-    music_render_header(music_label('music.meta.song_not_found_title', 'Không tìm thấy bài hát - CarrotMusic'), music_label('music.meta.song_not_found_description', 'Bài hát không tồn tại hoặc đã bị ẩn.'));
+    music_render_header(music_label('music.meta.song_not_found_title', 'Không tìm thấy bài hát - ' . music_brand_name()), music_label('music.meta.song_not_found_description', 'Bài hát không tồn tại hoặc đã bị ẩn.'));
     echo '<section class="section"><div class="empty">' . music_h($errorMessage ?: music_label('music.error.song_not_found', 'Không tìm thấy bài hát.')) . '</div></section>';
     music_render_footer();
     exit;
 }
 
-$artistName = (string) ($song['artist_names'] ?: $song['artist'] ?: music_label('music.label.brand', 'CarrotMusic'));
+music_redirect_to_canonical(music_song_url((string) $song['id']), ['id']);
+
+$artistName = (string) ($song['artist_names'] ?: $song['artist'] ?: music_label('music.label.brand', music_brand_name()));
 $songGenreTags = music_split_genres((string) ($song['genre'] ?? ''));
+$songAlbum = trim((string) ($song['album'] ?? ''));
 $songYear = trim((string) ($song['year'] ?? ''));
 $songLang = trim((string) ($song['lang'] ?? ''));
+$songYoutubeId = music_youtube_video_id((string) ($song['link_ytb'] ?? ''));
 $songCountryCode = '';
 $songCountryName = '';
 if ($songLang !== '' && $pdo instanceof PDO) {
@@ -70,19 +74,27 @@ $byArtist = $songArtists
     ? array_map(static fn(array $artist): array => [
         '@type' => 'MusicGroup',
         'name' => (string) $artist['name'],
-        'url' => music_artist_url((int) $artist['id']),
+        'url' => music_artist_url((int) $artist['id'], (string) $artist['name']),
     ], $songArtists)
     : ['@type' => 'MusicGroup', 'name' => $artistName];
 $price = music_song_price($song, $paypalConfig);
 $canDownload = trim((string) ($song['mp3'] ?? '')) !== '' && ($price <= 0 || music_has_paid_song((string) $song['id']));
-$title = (string) $song['name'] . ' - ' . $artistName . ' | CarrotMusic';
+$title = (string) $song['name'] . ' - ' . $artistName . ' | ' . music_brand_name();
 $description = music_excerpt($song['lyrics'] ?: (($song['album'] ?? '') . ' ' . ($song['genre'] ?? '')), 155);
 music_render_header($title, $description, music_cover($song['avatar']));
 ?>
 <article class="detail">
-    <figure class="detail-cover detail-cover--motion">
-        <img src="<?= music_h(music_cover($song['avatar'])) ?>" alt="<?= music_h($song['name']) ?>">
-    </figure>
+    <aside class="detail-side">
+        <figure class="detail-cover detail-cover--motion">
+            <img src="<?= music_h(music_cover($song['avatar'])) ?>" alt="<?= music_h($song['name']) ?>">
+            <?php if ($songYoutubeId !== ''): ?>
+                <button class="song-video-play" type="button" data-video-open aria-label="<?= music_h(music_label('music.video.play', 'Play Video')) ?>" title="<?= music_h(music_label('music.video.play', 'Play Video')) ?>">
+                    <i class="fas fa-video" aria-hidden="true"></i>
+                </button>
+            <?php endif; ?>
+        </figure>
+        <?= music_app_banners() ?>
+    </aside>
     <div class="detail-main">
         <p class="eyebrow"><?= music_h(music_label('music.song.eyebrow', 'Song detail')) ?></p>
         <h1><?= music_h($song['name']) ?></h1>
@@ -91,15 +103,18 @@ music_render_header($title, $description, music_cover($song['avatar']));
                 <span><?= music_h($artistName) ?></span>
             <?php else: ?>
                 <?php foreach ($songArtists as $artist): ?>
-                    <span><a class="artist-tag site-link" href="<?= music_h(music_artist_url((int) $artist['id'])) ?>"><?= music_h($artist['name']) ?></a></span>
+                    <span><a class="artist-tag site-link" href="<?= music_h(music_artist_url((int) $artist['id'], (string) $artist['name'])) ?>"><?= music_h($artist['name']) ?></a></span>
                 <?php endforeach; ?>
+            <?php endif; ?>
+            <?php if ($songAlbum !== ''): ?>
+                <span class="album-tag"><i class="fas fa-compact-disc" aria-hidden="true"></i><?= music_h($songAlbum) ?></span>
             <?php endif; ?>
             <?php foreach ($songGenreTags as $genreTag): ?>
                 <span><a class="genre-tag site-link" href="<?= music_h(music_genre_url($genreTag)) ?>"><?= music_h($genreTag) ?></a></span>
             <?php endforeach; ?>
             <?php if ($songYear !== ''): ?><span><a class="year-tag site-link" href="<?= music_h(music_song_year_url((int) $songYear)) ?>"><?= music_h($songYear) ?></a></span><?php endif; ?>
             <?php if ($songLang !== '' && $songCountryCode !== ''): ?>
-                <span><a class="lang-tag site-link" href="<?= music_h(music_url('music_tourism.php?country=' . rawurlencode($songCountryCode))) ?>"><?= music_tourism_icon() ?><?= music_h($songCountryName !== '' ? $songCountryName : $songCountryCode) ?></a></span>
+                <span><a class="lang-tag site-link" href="<?= music_h(music_country_url($songCountryCode)) ?>"><?= music_tourism_icon() ?><?= music_h($songCountryName !== '' ? $songCountryName : $songCountryCode) ?></a></span>
             <?php elseif ($songLang !== ''): ?>
                 <span class="lang-tag"><?= music_tourism_icon() ?><?= music_h($songLang) ?></span>
             <?php endif; ?>
@@ -126,12 +141,17 @@ music_render_header($title, $description, music_cover($song['avatar']));
             <?= music_detail_action_buttons((string) $song['name'], music_song_url((string) $song['id'])) ?>
         </div>
         <?php if (!empty($song['mp3'])): ?>
-            <div class="wave-box">
+            <div class="wave-box is-loading" id="song_wave_box">
                 <button class="wave-play" type="button" aria-label="<?= music_h(music_label('music.action.play', 'Phát bài hát')) ?>">
                     <?= music_play_icon() ?>
                 </button>
                 <div class="wave-main">
-                    <div id="song_waveform" class="song-waveform"></div>
+                    <div id="song_waveform" class="song-waveform">
+                        <div class="wave-loading" role="status" aria-live="polite">
+                            <span class="wave-loading-spinner" aria-hidden="true"></span>
+                            <span><?= music_h(music_label('music.wave.loading', 'Đang tải sóng nhạc')) ?></span>
+                        </div>
+                    </div>
                 </div>
             </div>
         <?php endif; ?>
@@ -154,6 +174,23 @@ music_render_header($title, $description, music_cover($song['avatar']));
         <?php endif; ?>
     </div>
 </article>
+
+<?php if ($songYoutubeId !== ''): ?>
+<div class="music-video-modal" id="music_video_modal" aria-hidden="true" data-video-id="<?= music_h($songYoutubeId) ?>">
+    <div class="music-video-stage">
+        <div id="music_video_player" class="music-video-player"></div>
+        <div class="music-video-lyrics" id="music_video_lyrics" aria-hidden="true"></div>
+        <div class="music-video-tools">
+            <button class="music-video-tool" type="button" data-video-lyrics aria-label="<?= music_h(music_label('music.video.hide_lyrics', 'Ẩn lyrics')) ?>" title="<?= music_h(music_label('music.video.hide_lyrics', 'Ẩn lyrics')) ?>">
+                <i class="fas fa-eye" aria-hidden="true"></i>
+            </button>
+            <button class="music-video-tool" type="button" data-video-close aria-label="<?= music_h(music_label('action.close', 'Close')) ?>" title="<?= music_h(music_label('action.close', 'Close')) ?>">
+                <i class="fas fa-times" aria-hidden="true"></i>
+            </button>
+        </div>
+    </div>
+</div>
+<?php endif; ?>
 
 <?php if ($relatedSongs): ?>
 <section class="section">
@@ -184,6 +221,7 @@ music_render_header($title, $description, music_cover($song['avatar']));
         name: <?= json_encode((string) $song['name'], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>,
         mp3: <?= json_encode((string) $song['mp3'], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>,
         url: <?= json_encode((string) $song['mp3'], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>,
+        waveform: <?= json_encode(music_audio_proxy_url((string) $song['mp3']), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>,
         artist: <?= json_encode($artistName, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>,
         album: <?= json_encode($artistName, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>,
         avatar: <?= json_encode(music_cover($song['avatar']), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>,
@@ -193,6 +231,7 @@ music_render_header($title, $description, music_cover($song['avatar']));
 
     const bootWaveform = (attempt = 0) => {
         const container = document.getElementById('song_waveform');
+        const waveBox = document.getElementById('song_wave_box');
         const playButton = document.querySelector('.wave-play');
         if (!container || !playButton) return;
         if (!window.WaveSurfer || !window.cr_player || !cr_player.audio_player) {
@@ -202,7 +241,7 @@ music_render_header($title, $description, music_cover($song['avatar']));
 
         const audio = cr_player.audio_player;
         const songUrl = new URL(songData.mp3, window.location.href).href;
-        const waveformUrl = new URL(songUrl);
+        const waveformUrl = new URL(songData.waveform || songUrl, window.location.href);
         waveformUrl.searchParams.set('cors', '1');
         const isThisSong = () => audio.src === songUrl;
         const wave = WaveSurfer.create({
@@ -231,6 +270,11 @@ music_render_header($title, $description, music_cover($song['avatar']));
             }
         };
 
+        const setWaveStatus = (status) => {
+            waveBox?.classList.toggle('is-loading', status === 'loading');
+            waveBox?.classList.toggle('is-error', status === 'error');
+        };
+
         playButton.addEventListener('click', () => {
             if (isThisSong()) {
                 cr_player.playOrPause();
@@ -245,7 +289,15 @@ music_render_header($title, $description, music_cover($song['avatar']));
         audio.addEventListener('ended', updateState);
         audio.addEventListener('timeupdate', updateState);
         audio.addEventListener('loadedmetadata', updateState);
-        wave.on('ready', updateState);
+        wave.on('ready', () => {
+            setWaveStatus('ready');
+            updateState();
+        });
+        wave.on('error', () => {
+            setWaveStatus('error');
+            const loading = container.querySelector('.wave-loading span:last-child');
+            if (loading) loading.textContent = <?= json_encode(music_label('music.wave.error', 'Chưa tải được sóng nhạc'), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>;
+        });
         updateState();
     };
 
@@ -254,6 +306,175 @@ music_render_header($title, $description, music_cover($song['avatar']));
     } else {
         bootWaveform();
     }
+})();
+</script>
+<?php endif; ?>
+
+<?php if ($songYoutubeId !== ''): ?>
+<script>
+(() => {
+    const modal = document.getElementById('music_video_modal');
+    const openButton = document.querySelector('[data-video-open]');
+    const closeButton = modal?.querySelector('[data-video-close]');
+    const lyricsButton = modal?.querySelector('[data-video-lyrics]');
+    const lyricsLayer = document.getElementById('music_video_lyrics');
+    const videoId = modal?.dataset.videoId || '';
+    const rawLyrics = <?= json_encode(strip_tags((string) $lyrics), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>;
+    let player = null;
+    let playerReady = false;
+    let lyricTimer = null;
+    let lyricItems = [];
+    let lyricShown = new Set();
+    let lastVideoTime = 0;
+
+    if (!modal || !openButton || !videoId) return;
+
+    const loadYouTubeApi = () => new Promise((resolve) => {
+        if (window.YT && window.YT.Player) {
+            resolve();
+            return;
+        }
+        const previousReady = window.onYouTubeIframeAPIReady;
+        window.onYouTubeIframeAPIReady = () => {
+            if (typeof previousReady === 'function') previousReady();
+            resolve();
+        };
+        if (!document.querySelector('script[src="https://www.youtube.com/iframe_api"]')) {
+            const script = document.createElement('script');
+            script.src = 'https://www.youtube.com/iframe_api';
+            document.head.appendChild(script);
+        }
+    });
+
+    const splitLongLine = (line, maxLength = 72) => {
+        const parts = [];
+        let value = line.trim();
+        while (value.length > maxLength) {
+            let cut = value.lastIndexOf(',', maxLength);
+            if (cut < 24) cut = value.lastIndexOf(' ', maxLength);
+            if (cut < 24) cut = maxLength;
+            parts.push(value.slice(0, cut).trim());
+            value = value.slice(cut).trim();
+        }
+        if (value !== '') parts.push(value);
+        return parts;
+    };
+
+    const buildLyricLines = () => {
+        const text = rawLyrics
+            .replace(/\r/g, '\n')
+            .replace(/&nbsp;/gi, ' ')
+            .replace(/\s+\n/g, '\n')
+            .trim();
+        if (text === '') return [];
+
+        return text
+            .split(/[\n.。!?！？]+/u)
+            .map((line) => line.replace(/\s+/g, ' ').trim())
+            .filter(Boolean)
+            .flatMap((line) => splitLongLine(line));
+    };
+
+    const prepareLyricItems = () => {
+        const lines = buildLyricLines();
+        const duration = player && typeof player.getDuration === 'function' ? player.getDuration() : 0;
+        const safeDuration = Number.isFinite(duration) && duration > 20 ? duration : Math.max(120, lines.length * 5);
+        const laneCount = window.matchMedia('(max-width: 700px)').matches ? 5 : 8;
+        lyricItems = lines.map((text, index) => ({
+            text,
+            lane: index % laneCount,
+            time: ((index + 0.65) / Math.max(1, lines.length + 0.4)) * safeDuration,
+        }));
+        lyricShown = new Set();
+        lastVideoTime = 0;
+        lyricsLayer?.replaceChildren();
+    };
+
+    const showLyric = (item) => {
+        if (!lyricsLayer || modal.classList.contains('is-lyrics-hidden')) return;
+        const line = document.createElement('span');
+        line.className = 'music-video-lyric-line';
+        line.textContent = item.text;
+        line.style.setProperty('--lane', String(item.lane));
+        line.style.setProperty('--duration', `${Math.max(8, Math.min(15, item.text.length / 7 + 7))}s`);
+        lyricsLayer.appendChild(line);
+        line.addEventListener('animationend', () => line.remove(), {once: true});
+    };
+
+    const startLyrics = () => {
+        window.clearInterval(lyricTimer);
+        prepareLyricItems();
+        lyricTimer = window.setInterval(() => {
+            if (!playerReady || !player || typeof player.getCurrentTime !== 'function') return;
+            const currentTime = player.getCurrentTime();
+            if (currentTime < lastVideoTime - 2) {
+                lyricShown = new Set();
+                lyricsLayer?.replaceChildren();
+            }
+            lastVideoTime = currentTime;
+            lyricItems.forEach((item, index) => {
+                if (!lyricShown.has(index) && currentTime >= item.time) {
+                    lyricShown.add(index);
+                    showLyric(item);
+                }
+            });
+        }, 260);
+    };
+
+    const openVideo = async () => {
+        modal.classList.add('is-open');
+        modal.setAttribute('aria-hidden', 'false');
+        document.body.classList.add('music-video-open');
+        await loadYouTubeApi();
+        if (!player) {
+            player = new YT.Player('music_video_player', {
+                videoId,
+                playerVars: {autoplay: 1, rel: 0, modestbranding: 1, playsinline: 1},
+                events: {
+                    onReady(event) {
+                        playerReady = true;
+                        event.target.playVideo();
+                        startLyrics();
+                    },
+                    onStateChange(event) {
+                        if (event.data === YT.PlayerState.PLAYING && lyricItems.length === 0) {
+                            startLyrics();
+                        }
+                    },
+                },
+            });
+        } else {
+            player.playVideo();
+            startLyrics();
+        }
+    };
+
+    const closeVideo = () => {
+        modal.classList.remove('is-open');
+        modal.setAttribute('aria-hidden', 'true');
+        document.body.classList.remove('music-video-open');
+        window.clearInterval(lyricTimer);
+        lyricsLayer?.replaceChildren();
+        if (player && typeof player.pauseVideo === 'function') {
+            player.pauseVideo();
+        }
+    };
+
+    openButton.addEventListener('click', openVideo);
+    closeButton?.addEventListener('click', closeVideo);
+    lyricsButton?.addEventListener('click', () => {
+        const hidden = modal.classList.toggle('is-lyrics-hidden');
+        lyricsButton.setAttribute('aria-label', hidden
+            ? <?= json_encode(music_label('music.video.show_lyrics', 'Hiện lyrics'), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>
+            : <?= json_encode(music_label('music.video.hide_lyrics', 'Ẩn lyrics'), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>);
+        lyricsButton.innerHTML = hidden ? '<i class="fas fa-eye-slash" aria-hidden="true"></i>' : '<i class="fas fa-eye" aria-hidden="true"></i>';
+        if (!hidden) {
+            lyricsLayer?.replaceChildren();
+        }
+    });
+    document.addEventListener('keydown', (event) => {
+        if (event.key === 'Escape' && modal.classList.contains('is-open')) closeVideo();
+    });
 })();
 </script>
 <?php endif; ?>

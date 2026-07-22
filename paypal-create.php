@@ -49,10 +49,8 @@ if ($tokenStatus >= 300 || empty($tokenData['access_token'])) {
     exit('Chưa thể kết nối đến cổng thanh toán. Vui lòng thử lại sau.');
 }
 
-$scheme = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http';
-$host = $_SERVER['HTTP_HOST'] ?? 'music.carrot28.com';
-$returnUrl = $scheme . '://' . $host . music_url('paypal-return.php?id=' . rawurlencode($songId));
-$cancelUrl = $scheme . '://' . $host . music_song_url($songId);
+$returnUrl = music_absolute_url('paypal-return.php?id=' . rawurlencode($songId));
+$cancelUrl = rtrim(music_site_origin(), '/') . music_song_url($songId);
 
 $payload = [
     'intent' => 'CAPTURE',

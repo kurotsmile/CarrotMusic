@@ -3,12 +3,12 @@ require_once __DIR__ . '/includes/music.php';
 
 if (isset($_GET['logout'])) {
     unset($_SESSION['home_user_id'], $_SESSION['home_user_name'], $_SESSION['home_user_email'], $_SESSION['home_user_role'], $_SESSION['home_user_avatar']);
-    header('Location: index.php');
+    header('Location: ' . music_home_url());
     exit;
 }
 
 if (empty($_SESSION['home_user_id'])) {
-    header('Location: index.php?oauth_error=' . rawurlencode(music_label('login.required', 'Vui lòng đăng nhập để xem hồ sơ.')));
+    header('Location: ' . music_url_with_query(music_home_url(), ['oauth_error' => music_label('login.required', 'Vui lòng đăng nhập để xem hồ sơ.')]));
     exit;
 }
 
@@ -51,7 +51,7 @@ if (!$pdo instanceof PDO) {
         $user = $stmt->fetch();
         if (!$user) {
             unset($_SESSION['home_user_id'], $_SESSION['home_user_name'], $_SESSION['home_user_email'], $_SESSION['home_user_role'], $_SESSION['home_user_avatar']);
-            header('Location: index.php?oauth_error=' . rawurlencode(music_label('profile.not_found', 'Không tìm thấy tài khoản.')));
+            header('Location: ' . music_url_with_query(music_home_url(), ['oauth_error' => music_label('profile.not_found', 'Không tìm thấy tài khoản.')]));
             exit;
         }
     } catch (Throwable $e) {
@@ -69,8 +69,8 @@ $profileLang = trim((string) ($user['lang'] ?? current_lang_key()));
 $profileSex = trim((string) ($user['sex'] ?? ''));
 
 music_render_header(
-    music_label('profile.title', 'Profile') . ' | CarrotMusic',
-    music_label('profile.description', 'View and update your CarrotMusic profile.'),
+    music_label('profile.title', 'Profile') . ' | ' . music_brand_name(),
+    music_label('profile.description', 'View and update your ' . music_brand_name() . ' profile.'),
     $profileAvatar
 );
 ?>

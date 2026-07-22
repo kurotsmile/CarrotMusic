@@ -15,7 +15,7 @@ if ($orderId === '') {
     $errorMessage = 'Thiếu thông tin đơn hàng thanh toán.';
 } elseif (!$pdo instanceof PDO) {
     http_response_code(500);
-    $errorMessage = $errorMessage ?: 'CarrotMusic đang gặp sự cố kết nối. Vui lòng thử lại sau.';
+    $errorMessage = $errorMessage ?: music_brand_name() . ' đang gặp sự cố kết nối. Vui lòng thử lại sau.';
 } else {
     try {
         $stmt = $pdo->prepare('
@@ -116,8 +116,8 @@ if ($pdo instanceof PDO && !empty($order['song_id'])) {
 }
 
 $isCompleted = (($order['status'] ?? '') === 'COMPLETED');
-$title = ($order['song_name'] ?? 'Đơn hàng') . ' - Thanh toán CarrotMusic';
-music_render_header($title, 'Kết quả thanh toán bài hát trên CarrotMusic.', music_cover($order['song_avatar'] ?? ''));
+$title = ($order['song_name'] ?? 'Đơn hàng') . ' - Thanh toán ' . music_brand_name();
+music_render_header($title, 'Kết quả thanh toán bài hát trên ' . music_brand_name() . '.', music_cover($order['song_avatar'] ?? ''));
 ?>
 <section class="detail">
     <img class="detail-cover" src="<?= music_h(music_cover($order['song_avatar'] ?? ($song['avatar'] ?? ''))) ?>" alt="">

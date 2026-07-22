@@ -12,13 +12,15 @@ $errorMessage = $db_error ?? '';
 if ($year < 1000 || $year > 9999) {
     http_response_code(404);
     music_render_header(
-        music_label('music.meta.year_not_found_title', 'Không tìm thấy năm - CarrotMusic'),
+        music_label('music.meta.year_not_found_title', 'Không tìm thấy năm - ' . music_brand_name()),
         music_label('music.meta.year_not_found_description', 'Mốc năm này hiện chưa có bài hát.')
     );
     echo '<section class="section"><div class="empty">' . music_h(music_label('music.error.year_not_found', 'Không tìm thấy bài hát cho mốc năm này.')) . '</div></section>';
     music_render_footer();
     exit;
 }
+
+music_redirect_to_canonical(music_song_year_url($year), ['year']);
 
 if ($pdo instanceof PDO) {
     try {
@@ -72,8 +74,8 @@ if ($pdo instanceof PDO) {
 
 $yearTitle = sprintf(music_label('music.year.title', 'Nhạc năm %s'), (string) $year);
 music_render_header(
-    $yearTitle . ' | CarrotMusic',
-    sprintf(music_label('music.year.description', 'Khám phá các bài hát được phát hành trong năm %s trên CarrotMusic.'), (string) $year)
+    $yearTitle . ' | ' . music_brand_name(),
+    sprintf(music_label('music.year.description', 'Khám phá các bài hát được phát hành trong năm %s trên ' . music_brand_name() . '.'), (string) $year)
 );
 ?>
 <section class="section">
@@ -82,10 +84,10 @@ music_render_header(
             <h2><?= music_h($yearTitle) ?></h2>
             <p><?= number_format($totalSongs) ?> <?= music_h(music_label('music.label.songs', 'bài hát')) ?> · <?= music_h(music_label('music.year.intro', 'Một lát cắt âm nhạc để nghe lại những giai điệu của năm này.')) ?></p>
         </div>
-        <a class="section-view-all" href="<?= music_h(music_url('index.php#timeline')) ?>"><i class="fas fa-arrow-left"></i><?= music_h(music_label('music.timeline', 'Dòng thời gian')) ?></a>
+        <a class="section-view-all" href="<?= music_h(music_home_url('timeline')) ?>"><i class="fas fa-arrow-left"></i><?= music_h(music_label('music.timeline', 'Dòng thời gian')) ?></a>
     </div>
     <?php if ($errorMessage): ?><div class="empty"><?= music_h($errorMessage) ?></div><?php endif; ?>
-    <?= music_render_pagination($currentPage, $totalPages, static fn(int $page): string => music_song_year_url($year) . '&page_no=' . $page) ?>
+    <?= music_render_pagination($currentPage, $totalPages, static fn(int $page): string => music_url_with_query(music_song_year_url($year), ['page_no' => $page])) ?>
     <div class="grid">
         <?php foreach ($songs as $song): ?>
             <?php $songArtist = $song['artist_names'] ?: $song['artist'] ?: music_label('music.label.unknown_artist', 'Unknown artist'); ?>
@@ -105,6 +107,6 @@ music_render_header(
         <?php endforeach; ?>
     </div>
     <?php if (!$songs && !$errorMessage): ?><div class="empty"><?= music_h(music_label('music.year.no_songs', 'Chưa có bài hát nào trong mốc năm này.')) ?></div><?php endif; ?>
-    <?= music_render_pagination($currentPage, $totalPages, static fn(int $page): string => music_song_year_url($year) . '&page_no=' . $page) ?>
+    <?= music_render_pagination($currentPage, $totalPages, static fn(int $page): string => music_url_with_query(music_song_year_url($year), ['page_no' => $page])) ?>
 </section>
 <?php music_render_footer(); ?>

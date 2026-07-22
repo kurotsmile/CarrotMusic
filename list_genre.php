@@ -1,6 +1,8 @@
 <?php
 require_once __DIR__ . '/includes/music.php';
 
+music_redirect_to_canonical(music_genres_url(), []);
+
 $genres = [];
 $errorMessage = $db_error ?? '';
 $currentPage = max(1, (int) ($_GET['page_no'] ?? 1));
@@ -54,8 +56,8 @@ if ($pdo instanceof PDO) {
 }
 
 music_render_header(
-    music_label('music.meta.genre_list_title', 'Tất cả thể loại - CarrotMusic'),
-    music_label('music.meta.genre_list_description', 'Khám phá toàn bộ thể loại nhạc trên CarrotMusic.')
+    music_label('music.meta.genre_list_title', 'Tất cả thể loại - ' . music_brand_name()),
+    music_label('music.meta.genre_list_description', 'Khám phá toàn bộ thể loại nhạc trên ' . music_brand_name() . '.')
 );
 ?>
 <section class="section">
@@ -66,11 +68,11 @@ music_render_header(
         </div>
     </div>
     <?php if ($errorMessage): ?><div class="empty"><?= music_h($errorMessage) ?></div><?php endif; ?>
-    <?= music_render_pagination($currentPage, $totalPages, static fn(int $page): string => music_url('list_genre.php?page_no=' . $page)) ?>
+    <?= music_render_pagination($currentPage, $totalPages, static fn(int $page): string => music_url_with_query(music_genres_url(), ['page_no' => $page])) ?>
     <div class="genre-grid genre-grid--list">
         <?php foreach ($genres as $genre): ?>
             <?php $genreAvatar = trim((string) ($genre['avatar'] ?? '')); ?>
-            <a class="genre-card genre-card--list site-link" href="<?= music_h(music_genre_url((string) $genre['genre_id'])) ?>">
+            <a class="genre-card genre-card--list site-link" href="<?= music_h(music_genre_url((string) $genre['genre_id'], (string) ($genre['title'] ?: $genre['genre_id']))) ?>">
                 <?php if ($genreAvatar !== ''): ?>
                     <img src="<?= music_h(music_cover($genreAvatar)) ?>" alt="<?= music_h($genre['title'] ?: $genre['genre_id']) ?>">
                 <?php else: ?>
@@ -92,6 +94,6 @@ music_render_header(
         <?php endforeach; ?>
     </div>
     <?php if (!$genres && !$errorMessage): ?><div class="empty"><?= music_h(music_label('music.empty.no_genres', 'Chưa có thể loại.')) ?></div><?php endif; ?>
-    <?= music_render_pagination($currentPage, $totalPages, static fn(int $page): string => music_url('list_genre.php?page_no=' . $page)) ?>
+    <?= music_render_pagination($currentPage, $totalPages, static fn(int $page): string => music_url_with_query(music_genres_url(), ['page_no' => $page])) ?>
 </section>
 <?php music_render_footer(); ?>

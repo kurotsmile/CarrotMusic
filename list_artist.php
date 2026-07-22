@@ -1,6 +1,8 @@
 <?php
 require_once __DIR__ . '/includes/music.php';
 
+music_redirect_to_canonical(music_artists_url(), []);
+
 $artists = [];
 $errorMessage = $db_error ?? '';
 $currentPage = max(1, (int) ($_GET['page_no'] ?? 1));
@@ -53,8 +55,8 @@ if ($pdo instanceof PDO) {
 }
 
 music_render_header(
-    music_label('music.meta.artist_list_title', 'Tất cả nghệ sĩ - CarrotMusic'),
-    music_label('music.meta.artist_list_description', 'Khám phá toàn bộ nghệ sĩ trên CarrotMusic.')
+    music_label('music.meta.artist_list_title', 'Tất cả nghệ sĩ - ' . music_brand_name()),
+    music_label('music.meta.artist_list_description', 'Khám phá toàn bộ nghệ sĩ trên ' . music_brand_name() . '.')
 );
 ?>
 <section class="section">
@@ -65,16 +67,16 @@ music_render_header(
         </div>
     </div>
     <?php if ($errorMessage): ?><div class="empty"><?= music_h($errorMessage) ?></div><?php endif; ?>
-    <?= music_render_pagination($currentPage, $totalPages, static fn(int $page): string => music_url('list_artist.php?page_no=' . $page)) ?>
+    <?= music_render_pagination($currentPage, $totalPages, static fn(int $page): string => music_url_with_query(music_artists_url(), ['page_no' => $page])) ?>
     <div class="artist-grid">
         <?php foreach ($artists as $artist): ?>
-            <a class="artist-card site-link" href="<?= music_h(music_artist_url((int) $artist['id'])) ?>">
+            <a class="artist-card site-link" href="<?= music_h(music_artist_url((int) $artist['id'], (string) $artist['name'])) ?>">
                 <img src="<?= music_h(music_cover($artist['avatar'])) ?>" alt="<?= music_h($artist['name']) ?>">
                 <span><strong><?= music_h($artist['name']) ?></strong><span><?= number_format((int) $artist['song_count']) ?> <?= music_h(music_label('music.label.songs', 'bài hát')) ?></span></span>
             </a>
         <?php endforeach; ?>
     </div>
     <?php if (!$artists && !$errorMessage): ?><div class="empty"><?= music_h(music_label('music.empty.no_artists', 'Chưa có nghệ sĩ.')) ?></div><?php endif; ?>
-    <?= music_render_pagination($currentPage, $totalPages, static fn(int $page): string => music_url('list_artist.php?page_no=' . $page)) ?>
+    <?= music_render_pagination($currentPage, $totalPages, static fn(int $page): string => music_url_with_query(music_artists_url(), ['page_no' => $page])) ?>
 </section>
 <?php music_render_footer(); ?>

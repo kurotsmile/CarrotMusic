@@ -3,7 +3,7 @@ if (!defined('CARROT_SITE_KEY')) {
     define('CARROT_SITE_KEY', 'CarrotMusic');
 }
 if (!defined('CARROT_SITE_ALIASES')) {
-    define('CARROT_SITE_ALIASES', ['CarrotMusic', 'Music', 'music.carrot28.com']);
+    define('CARROT_SITE_ALIASES', ['CarrotMusic', 'Music', 'Heart Beat Play', 'HeartbeatPlay', 'heartbeatplay.com', 'music.carrot28.com']);
 }
 require_once __DIR__ . '/../../CarrotHome/config/database.php';
 require_once __DIR__ . '/../../CarrotHome/includes/functions.php';
@@ -143,13 +143,44 @@ function music_detail_action_buttons(string $title = '', string $url = ''): stri
 {
     $title = trim($title);
     $url = trim($url);
-    return '<button class="btn js-music-share" type="button" data-share-title="' . music_h($title) . '" data-share-url="' . music_h($url) . '"><i class="fas fa-share-alt"></i>' . music_h(music_label('music.action.share', 'Chia sẻ')) . '</button>'
+    return '<button class="btn js-music-share" type="button" data-share-title="' . music_h($title) . '" data-share-url="' . music_h($url) . '"><i class="fas fa-share-alt"></i>' . music_h(music_label('share', 'Chia sẻ')) . '</button>'
         . '<button class="btn js-music-qr" type="button" data-share-title="' . music_h($title) . '" data-share-url="' . music_h($url) . '"><i class="fas fa-qrcode"></i>' . music_h(music_label('music.action.qr_code', 'QR code')) . '</button>';
 }
 
 function music_label(string $key, string $default, ?string $langKey = null): string
 {
     return ui_label($key, $default, $langKey);
+}
+
+function music_brand_name(): string
+{
+    return 'Heart Beat Play';
+}
+
+function music_primary_host(): string
+{
+    return 'heartbeatplay.com';
+}
+
+function music_site_origin(): string
+{
+    $host = strtolower(trim((string) ($_SERVER['HTTP_HOST'] ?? '')));
+    $host = $host !== '' ? preg_replace('/:\d+$/', '', $host) : music_primary_host();
+    if ($host === 'music.carrot28.com') {
+        $host = music_primary_host();
+    }
+
+    $scheme = 'https';
+    if (
+        $host !== music_primary_host()
+        && empty($_SERVER['HTTP_X_FORWARDED_PROTO'])
+        && empty($_SERVER['HTTPS'])
+        && in_array($host, ['localhost', '127.0.0.1'], true)
+    ) {
+        $scheme = 'http';
+    }
+
+    return $scheme . '://' . $host;
 }
 
 function music_base_path(): string
@@ -163,24 +194,168 @@ function music_url(string $path = ''): string
     return music_base_path() . '/' . ltrim($path, '/');
 }
 
+function music_absolute_url(string $path = ''): string
+{
+    return rtrim(music_site_origin(), '/') . music_url($path);
+}
+
+function music_slug(string $value): string
+{
+    $value = trim(rawurldecode((string) $value));
+    if (function_exists('seo_slug_text')) {
+        $value = seo_slug_text($value);
+    }
+    $value = str_replace(['_', '+'], '-', $value);
+    if (function_exists('iconv')) {
+        $ascii = @iconv('UTF-8', 'ASCII//TRANSLIT//IGNORE', $value);
+        if (is_string($ascii) && trim($ascii) !== '') {
+            $value = $ascii;
+        }
+    }
+    $value = strtolower($value);
+    $value = preg_replace('/[^a-z0-9]+/', '-', $value);
+    $value = trim((string) $value, '-');
+    return $value !== '' ? $value : 'music';
+}
+
+function music_url_with_query(string $url, array $query): string
+{
+    $query = array_filter($query, static fn($value): bool => trim((string) $value) !== '');
+    if (!$query) {
+        return $url;
+    }
+    return $url . (strpos($url, '?') !== false ? '&' : '?') . http_build_query($query);
+}
+
+function music_redirect_to_canonical(string $canonicalUrl, array $removeQueryKeys = []): void
+{
+    $requestUri = (string) ($_SERVER['REQUEST_URI'] ?? '');
+    $requestPath = parse_url($requestUri, PHP_URL_PATH) ?: '';
+    parse_str((string) (parse_url($requestUri, PHP_URL_QUERY) ?: ''), $visibleQuery);
+    $expectedPath = parse_url($canonicalUrl, PHP_URL_PATH) ?: '';
+    $redirectNeeded = $requestPath !== $expectedPath;
+    foreach ($removeQueryKeys as $key) {
+        if (isset($visibleQuery[$key])) {
+            $redirectNeeded = true;
+            break;
+        }
+    }
+
+    if (!$redirectNeeded) {
+        return;
+    }
+
+    $extraQuery = $visibleQuery;
+    foreach ($removeQueryKeys as $key) {
+        unset($extraQuery[$key]);
+    }
+    if ($extraQuery) {
+        $canonicalUrl = music_url_with_query($canonicalUrl, $extraQuery);
+    }
+    header('Location: ' . $canonicalUrl, true, 301);
+    exit;
+}
+
 function music_song_url(string $id): string
 {
-    return music_url('song.php?id=' . rawurlencode($id));
+    return music_url(music_slug($id));
 }
 
-function music_artist_url(int $id): string
+function music_home_url(string $fragment = ''): string
 {
-    return music_url('artist.php?id=' . $id);
+    $url = music_url('');
+    $fragment = ltrim(trim($fragment), '#');
+    return $fragment !== '' ? $url . '#' . rawurlencode($fragment) : $url;
 }
 
-function music_genre_url(string $id): string
+function music_artist_url(int $id, string $name = ''): string
 {
-    return music_url('genre.php?id=' . rawurlencode($id));
+    $slug = trim($name) !== '' ? music_slug($name) : (string) $id;
+    return music_url('artist/' . rawurlencode($slug));
+}
+
+function music_genre_url(string $id, string $title = ''): string
+{
+    $slug = trim($title) !== '' ? music_slug($title) : music_slug($id);
+    return music_url('genre/' . rawurlencode($slug));
 }
 
 function music_song_year_url(int $year): string
 {
-    return music_url('song_year.php?year=' . rawurlencode((string) $year));
+    return music_url('year/' . rawurlencode((string) $year));
+}
+
+function music_artists_url(): string
+{
+    return music_url('artists');
+}
+
+function music_genres_url(): string
+{
+    return music_url('genres');
+}
+
+function music_countries_url(): string
+{
+    return music_url('countries');
+}
+
+function music_country_url(string $countryCode): string
+{
+    return music_url('country/' . rawurlencode(strtoupper(trim($countryCode))));
+}
+
+function music_audio_proxy_url(string $url): string
+{
+    $host = strtolower((string) (parse_url($url, PHP_URL_HOST) ?: ''));
+    if ($host === 'nas.carrot28.com') {
+        return music_url('audio-proxy.php?url=' . rawurlencode($url));
+    }
+    return $url;
+}
+
+function music_app_banners(): string
+{
+    return '<a class="music-app-banner" href="https://carrot28.com/Music-for-life" target="_blank" rel="noopener noreferrer">'
+        . '<img src="' . music_h(music_url('images/bn_app.png')) . '" alt="">'
+        . '<span>'
+        . '<small>' . music_h(music_label('music.app_banner.eyebrow', 'Nghe nhạc mọi thiết bị')) . '</small>'
+        . '<strong>Heartbeat Music</strong>'
+        . '<em>' . music_h(music_label('music.app_banner.cta', 'Khám phá ứng dụng')) . '</em>'
+        . '</span>'
+        . '</a>'
+        . '<a class="music-app-banner music-app-banner--android" href="https://play.google.com/store/apps/details?id=com.carrotstore.heartbeatmusic" target="_blank" rel="noopener noreferrer">'
+        . '<img src="' . music_h(music_url('favicon/android-chrome-192x192.png')) . '" alt="">'
+        . '<span>'
+        . '<small>' . music_h(music_label('music.android_banner.eyebrow', 'Tải ứng dụng Android')) . '</small>'
+        . '<strong>Heart Beat Play</strong>'
+        . '<em>' . music_h(music_label('music.android_banner.cta', 'Mở trên Google Play')) . '</em>'
+        . '</span>'
+        . '</a>';
+}
+
+function music_youtube_video_id(string $url): string
+{
+    $url = trim($url);
+    if ($url === '') {
+        return '';
+    }
+
+    $host = strtolower((string) (parse_url($url, PHP_URL_HOST) ?: ''));
+    $path = trim((string) (parse_url($url, PHP_URL_PATH) ?: ''), '/');
+    parse_str((string) (parse_url($url, PHP_URL_QUERY) ?: ''), $query);
+
+    if (!empty($query['v']) && preg_match('/^[a-zA-Z0-9_-]{6,20}$/', (string) $query['v'])) {
+        return (string) $query['v'];
+    }
+    if (strpos($host, 'youtu.be') !== false && preg_match('/^[a-zA-Z0-9_-]{6,20}$/', $path)) {
+        return $path;
+    }
+    if (strpos($host, 'youtube.com') !== false && preg_match('~(?:embed|shorts)/([a-zA-Z0-9_-]{6,20})~', $path, $match)) {
+        return $match[1];
+    }
+
+    return '';
 }
 
 function music_split_genres(?string $genres): array
@@ -190,9 +365,9 @@ function music_split_genres(?string $genres): array
 
 function music_page_url(string $slug, string $lang = ''): string
 {
-    $url = music_url('index.php?page=' . rawurlencode(trim($slug)));
+    $url = music_url('page/' . rawurlencode(music_slug(trim($slug))));
     if (trim($lang) !== '') {
-        $url .= '&lang=' . rawurlencode(trim($lang));
+        $url = music_url_with_query($url, ['lang' => trim($lang)]);
     }
     return $url;
 }
@@ -393,7 +568,7 @@ function music_fetch_songs(PDO $pdo, int $limit = 24, string $where = '', array 
     return $stmt->fetchAll();
 }
 
-function music_fetch_popular_songs(PDO $pdo, int $limit = 14): array
+function music_fetch_popular_songs(PDO $pdo, int $limit = 14, string $where = '', array $params = []): array
 {
     $sql = '
         SELECT s.*, popular.view_count,
@@ -402,16 +577,21 @@ function music_fetch_popular_songs(PDO $pdo, int $limit = 14): array
             SELECT song_id, COUNT(*) AS view_count, MAX(last_seen_at) AS last_viewed_at
             FROM song_view
             GROUP BY song_id
-            ORDER BY view_count DESC, last_viewed_at DESC, song_id ASC
-            LIMIT ' . max(1, $limit) . '
         ) popular
         INNER JOIN song s ON s.id = popular.song_id
         LEFT JOIN song_artist_map sam ON sam.song_id = s.id
         LEFT JOIN song_artist sa ON sa.id = sam.artist_id
+        WHERE 1 = 1
+    ';
+    if ($where !== '') {
+        $sql .= ' AND ' . $where;
+    }
+    $sql .= '
         GROUP BY s.id
-        ORDER BY popular.view_count DESC, MAX(popular.last_viewed_at) DESC, s.id ASC';
+        ORDER BY popular.view_count DESC, MAX(popular.last_viewed_at) DESC, s.id ASC
+        LIMIT ' . max(1, $limit);
     $stmt = $pdo->prepare($sql);
-    $stmt->execute();
+    $stmt->execute($params);
     return $stmt->fetchAll();
 }
 
@@ -453,6 +633,23 @@ function music_fetch_artist(PDO $pdo, int $id): ?array
     return $row ?: null;
 }
 
+function music_fetch_artist_by_slug(PDO $pdo, string $slug): ?array
+{
+    $slug = music_slug($slug);
+    if ($slug === '') {
+        return null;
+    }
+
+    $stmt = $pdo->query('SELECT * FROM song_artist ORDER BY name ASC, id ASC');
+    foreach ($stmt ? $stmt->fetchAll() : [] as $artist) {
+        if (music_slug((string) ($artist['name'] ?? '')) === $slug || (string) ($artist['id'] ?? '') === $slug) {
+            return $artist;
+        }
+    }
+
+    return null;
+}
+
 function music_fetch_genre(PDO $pdo, string $id): ?array
 {
     $id = trim($id);
@@ -484,6 +681,28 @@ function music_fetch_genre(PDO $pdo, string $id): ?array
     return $row && (int) ($row['song_count'] ?? 0) > 0 ? $row : null;
 }
 
+function music_fetch_genre_by_slug(PDO $pdo, string $slug): ?array
+{
+    $slug = music_slug($slug);
+    if ($slug === '') {
+        return null;
+    }
+
+    try {
+        $stmt = $pdo->query('SELECT genre_id, title FROM song_genre ORDER BY title ASC, genre_id ASC');
+        foreach ($stmt ? $stmt->fetchAll() : [] as $genre) {
+            $genreId = (string) ($genre['genre_id'] ?? '');
+            $genreTitle = (string) ($genre['title'] ?? '');
+            if (music_slug($genreTitle !== '' ? $genreTitle : $genreId) === $slug || music_slug($genreId) === $slug) {
+                return music_fetch_genre($pdo, $genreId);
+            }
+        }
+    } catch (Throwable $e) {
+    }
+
+    return music_fetch_genre($pdo, $slug);
+}
+
 function music_has_paid_song(string $songId): bool
 {
     return !empty($_SESSION['paid_music_songs'][$songId]);
@@ -491,7 +710,7 @@ function music_has_paid_song(string $songId): bool
 
 function music_render_header(string $title, string $description = '', string $image = ''): void
 {
-    $description = $description !== '' ? $description : music_label('music.meta.description', 'CarrotMusic là nơi bạn tìm, nghe và lưu lại những bài hát hợp tâm trạng mỗi ngày.');
+    $description = $description !== '' ? $description : music_label('music.meta.description', music_brand_name() . ' là nơi bạn tìm, nghe và lưu lại những bài hát hợp tâm trạng mỗi ngày.');
     $image = $image !== '' ? $image : music_url('favicon/android-chrome-512x512.png');
     $searchQuery = trim((string) ($_GET['q'] ?? ''));
     $lang = current_lang_key();
@@ -515,6 +734,7 @@ function music_render_header(string $title, string $description = '', string $im
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title><?= music_h($title) ?></title>
     <meta name="description" content="<?= music_h($description) ?>">
+    <?= carrot_google_search_verification_meta($GLOBALS['pdo'] ?? null, 'CarrotMusic') ?>
     <meta property="og:title" content="<?= music_h($title) ?>">
     <meta property="og:description" content="<?= music_h($description) ?>">
     <meta property="og:image" content="<?= music_h($image) ?>">
@@ -537,20 +757,20 @@ function music_render_header(string $title, string $description = '', string $im
 </head>
 <body>
 <header class="site-header">
-    <a class="brand site-link" href="<?= music_h(music_url('index.php')) ?>">
+    <a class="brand site-link" href="<?= music_h(music_home_url()) ?>">
         <span class="brand-mark">♪</span>
-        <span><strong>CarrotMusic</strong><small><?= music_h(music_label('music.brand_tagline', 'Listen to music every day')) ?></small></span>
+        <span><strong><?= music_h(music_brand_name()) ?></strong><small><?= music_h(music_label('music.brand_tagline', 'Listen to music every day')) ?></small></span>
     </a>
-    <form class="header-search" method="get" action="<?= music_h(music_url('index.php')) ?>">
+    <form class="header-search" method="get" action="<?= music_h(music_home_url()) ?>">
         <input name="q" type="search" value="<?= music_h($searchQuery) ?>" placeholder="<?= music_h(music_label('music.search_placeholder', 'Tìm bài hát hoặc nghệ sĩ')) ?>">
         <button type="submit" aria-label="<?= music_h(music_label('action.search', 'Search')) ?>"><i class="fas fa-search"></i></button>
     </form>
     <nav>
         <span class="header-links">
-            <a class="site-link" href="<?= music_h(music_url('index.php')) ?>"><?= music_h(music_label('nav.explore', 'Explore')) ?></a>
-            <a class="site-link" href="<?= music_h(music_url('index.php#genres')) ?>"><?= music_h(music_label('music.label.genres', 'Genres')) ?></a>
-            <a class="site-link" href="<?= music_h(music_url('index.php#artists')) ?>"><?= music_h(music_label('music.label.artists', 'Artists')) ?></a>
-            <a class="site-link" href="<?= music_h(music_url('music_tourism.php')) ?>"><?= music_h(music_label('music.label.tourism', 'Du lịch')) ?></a>
+            <a class="site-link" href="<?= music_h(music_home_url()) ?>"><?= music_h(music_label('nav.explore', 'Explore')) ?></a>
+            <a class="site-link" href="<?= music_h(music_home_url('genres')) ?>"><?= music_h(music_label('music.label.genres', 'Genres')) ?></a>
+            <a class="site-link" href="<?= music_h(music_home_url('artists')) ?>"><?= music_h(music_label('music.label.artists', 'Artists')) ?></a>
+            <a class="site-link" href="<?= music_h(music_countries_url()) ?>"><?= music_h(music_label('music.label.tourism', 'Du lịch')) ?></a>
         </span>
         <span class="header-tools">
             <?php if ($languageOptions): ?>
@@ -637,7 +857,7 @@ function music_render_footer(): void
         <?php endforeach; ?>
         <?php if (!empty($footerSites)): ?>
             <div class="footer-column footer-sites">
-                <h2><?= music_h(music_label('music.footer.sites', 'Sites')) ?></h2>
+                <h2><?= music_h(music_label('footer.ecosystem', 'Sites')) ?></h2>
                 <?php foreach ($footerSites as $site): ?>
                     <?php
                     $siteName = trim((string) ($site['name'] ?? ''));
@@ -733,7 +953,7 @@ document.addEventListener('click', async (event) => {
                             <span>GitHub</span>
                         </a>
                     </div>
-                    <a class="music-login-email" href="../CarrotHome/login.php"><?= music_h(music_label('login.with_email', 'Login with email')) ?></a>
+                    <a class="music-login-email" href="../CarrotHome/login.php?redirect=${encodeURIComponent(window.location.href)}"><?= music_h(music_label('login.with_email', 'Login with email')) ?></a>
                 </div>
             `,
             showConfirmButton: false,

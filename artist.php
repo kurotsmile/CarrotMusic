@@ -2,12 +2,17 @@
 require_once __DIR__ . '/includes/music.php';
 
 $artistId = (int) ($_GET['id'] ?? 0);
+$artistSlug = trim((string) ($_GET['slug'] ?? ''));
 $artist = null;
 $songs = [];
 $errorMessage = $db_error ?? '';
 
-if ($pdo instanceof PDO && $artistId > 0) {
+if ($pdo instanceof PDO && ($artistId > 0 || $artistSlug !== '')) {
     try {
+        if ($artistId <= 0 && $artistSlug !== '') {
+            $artist = music_fetch_artist_by_slug($pdo, $artistSlug);
+            $artistId = (int) ($artist['id'] ?? 0);
+        }
         $cacheKey = music_cache_key('music_artist_detail', [
             'id' => $artistId,
         ]);
@@ -17,7 +22,7 @@ if ($pdo instanceof PDO && $artistId > 0) {
             $artist = is_array($cachedArtist['artist'] ?? null) ? $cachedArtist['artist'] : null;
             $songs = is_array($cachedArtist['songs'] ?? null) ? $cachedArtist['songs'] : [];
         } else {
-            $artist = music_fetch_artist($pdo, $artistId);
+            $artist = $artist ?: music_fetch_artist($pdo, $artistId);
             if ($artist) {
                 $stmt = $pdo->prepare('
                     SELECT s.*, GROUP_CONCAT(DISTINCT sa.name ORDER BY sa.name SEPARATOR ", ") AS artist_names
@@ -45,16 +50,18 @@ if ($pdo instanceof PDO && $artistId > 0) {
 
 if (!$artist) {
     http_response_code(404);
-    music_render_header(music_label('music.meta.artist_not_found_title', 'Không tìm thấy nghệ sĩ - CarrotMusic'), music_label('music.meta.artist_not_found_description', 'Nghệ sĩ không tồn tại hoặc đã bị ẩn.'));
+    music_render_header(music_label('music.meta.artist_not_found_title', 'Không tìm thấy nghệ sĩ - ' . music_brand_name()), music_label('music.meta.artist_not_found_description', 'Nghệ sĩ không tồn tại hoặc đã bị ẩn.'));
     echo '<section class="section"><div class="empty">' . music_h($errorMessage ?: music_label('music.error.artist_not_found', 'Không tìm thấy nghệ sĩ.')) . '</div></section>';
     music_render_footer();
     exit;
 }
 
-$title = (string) $artist['name'] . ' - ' . music_label('music.artist.role', 'Nghệ sĩ') . ' | CarrotMusic';
+music_redirect_to_canonical(music_artist_url((int) $artist['id'], (string) $artist['name']), ['id', 'slug']);
+
+$title = (string) $artist['name'] . ' - ' . music_label('music.artist.role', 'Nghệ sĩ') . ' | ' . music_brand_name();
 $description = music_excerpt($artist['description'] ?? '', 155);
 if ($description === '') {
-    $description = sprintf(music_label('music.artist.default_description', 'Nghe các bài hát của %s trên CarrotMusic.'), (string) $artist['name']);
+    $description = sprintf(music_label('music.artist.default_description', 'Nghe các bài hát của %s trên ' . music_brand_name() . '.'), (string) $artist['name']);
 }
 $artistLangKey = trim((string) ($artist['lang_key'] ?? ''));
 $artistCountryCode = '';
@@ -76,20 +83,23 @@ if ($pdo instanceof PDO && $artistLangKey !== '') {
 music_render_header($title, $description, music_cover($artist['avatar']));
 ?>
 <article class="detail">
-    <img class="detail-cover" src="<?= music_h(music_cover($artist['avatar'])) ?>" alt="<?= music_h($artist['name']) ?>">
+    <aside class="detail-side">
+        <img class="detail-cover" src="<?= music_h(music_cover($artist['avatar'])) ?>" alt="<?= music_h($artist['name']) ?>">
+        <?= music_app_banners() ?>
+    </aside>
     <div class="detail-main">
         <p class="eyebrow"><?= music_h(music_label('music.artist.eyebrow', 'Artist profile')) ?></p>
         <h1><?= music_h($artist['name']) ?></h1>
         <div class="detail-meta">
             <?php if ($artistLangKey !== '' && $artistCountryCode !== ''): ?>
-                <span><a class="lang-tag site-link" href="<?= music_h(music_url('music_tourism.php?country=' . rawurlencode($artistCountryCode))) ?>"><?= music_tourism_icon() ?><?= music_h($artistCountryName !== '' ? $artistCountryName : $artistCountryCode) ?></a></span>
+                <span><a class="lang-tag site-link" href="<?= music_h(music_country_url($artistCountryCode)) ?>"><?= music_tourism_icon() ?><?= music_h($artistCountryName !== '' ? $artistCountryName : $artistCountryCode) ?></a></span>
             <?php elseif ($artistLangKey !== ''): ?>
                 <span class="lang-tag"><?= music_tourism_icon() ?><?= music_h($artistLangKey) ?></span>
             <?php endif; ?>
             <span><?= number_format(count($songs)) ?> <?= music_h(music_label('music.label.songs', 'bài hát')) ?></span>
         </div>
         <div class="song-actions">
-            <?= music_detail_action_buttons((string) $artist['name'], music_artist_url((int) $artist['id'])) ?>
+            <?= music_detail_action_buttons((string) $artist['name'], music_artist_url((int) $artist['id'], (string) $artist['name'])) ?>
         </div>
         <?php if (!empty($artist['description'])): ?>
             <div class="lyrics">
@@ -169,7 +179,7 @@ document.querySelector('.js-add-artist-songs')?.addEventListener('click', async 
     'name' => (string) $artist['name'],
     'image' => music_cover($artist['avatar']),
     'description' => $description,
-    'url' => music_artist_url((int) $artist['id']),
+    'url' => music_artist_url((int) $artist['id'], (string) $artist['name']),
 ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_PRETTY_PRINT) ?>
 </script>
 <?php music_render_footer(); ?>

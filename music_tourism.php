@@ -76,8 +76,15 @@ if ($pdo instanceof PDO) {
     }
 }
 
-$pageTitle = music_label('music.tourism.meta_title', 'Du lịch âm nhạc - CarrotMusic');
-$pageDescription = music_label('music.tourism.meta_description', 'Khám phá bài hát và nghệ sĩ trên bản đồ thế giới của CarrotMusic.');
+$hasCountryRequest = isset($_GET['country']) || isset($_GET['c']);
+if ($selectedCountry !== '' && $hasCountryRequest) {
+    music_redirect_to_canonical(music_country_url($selectedCountry), ['country', 'c']);
+} elseif (!$hasCountryRequest) {
+    music_redirect_to_canonical(music_countries_url(), []);
+}
+
+$pageTitle = music_label('music.tourism.meta_title', 'Du lịch âm nhạc - ' . music_brand_name());
+$pageDescription = music_label('music.tourism.meta_description', 'Khám phá bài hát và nghệ sĩ trên bản đồ thế giới của ' . music_brand_name() . '.');
 music_render_header($pageTitle, $pageDescription);
 
 $mapSeries = [];
@@ -96,7 +103,7 @@ foreach ($countries as $country) {
         'icon' => (string) ($country['icon'] ?? ''),
         'songs' => $songCount,
         'artists' => $artistCount,
-        'url' => music_url('music_tourism.php?country=' . rawurlencode($code)),
+        'url' => music_country_url($code),
     ];
 }
 ?>
@@ -106,10 +113,10 @@ foreach ($countries as $country) {
     <div class="tourism-hero__copy">
         <p class="eyebrow"><?= music_h(music_label('music.tourism.eyebrow', 'Music tourism')) ?></p>
         <h1><?= music_h(music_label('music.tourism.title', 'Du lịch thế giới bằng âm nhạc')) ?></h1>
-        <p><?= music_h(music_label('music.tourism.description', 'Chọn một quốc gia trên bản đồ để mở các bài hát và nghệ sĩ có cùng vùng ngôn ngữ trong CarrotMusic.')) ?></p>
+        <p><?= music_h(music_label('music.tourism.description', 'Chọn một quốc gia trên bản đồ để mở các bài hát và nghệ sĩ có cùng vùng ngôn ngữ trong ' . music_brand_name() . '.')) ?></p>
     </div>
     <div class="tourism-stats" aria-label="<?= music_h(music_label('aria.tourism_stats', 'Music tourism statistics')) ?>">
-        <span><strong><?= number_format($stats['countries']) ?></strong><small><?= music_h(music_label('music.label.countries', 'quốc gia')) ?></small></span>
+        <span><strong><?= number_format($stats['countries']) ?></strong><small><?= music_h(music_label('country', 'quốc gia')) ?></small></span>
         <span><strong><?= number_format($stats['songs']) ?></strong><small><?= music_h(music_label('music.label.songs', 'bài hát')) ?></small></span>
         <span><strong><?= number_format($stats['artists']) ?></strong><small><?= music_h(music_label('music.label.artists', 'nghệ sĩ')) ?></small></span>
     </div>
@@ -124,7 +131,7 @@ foreach ($countries as $country) {
                 <p><?= music_h(music_label('music.tourism.map_hint', 'Quốc gia sáng màu hơn có nhiều bài hát và nghệ sĩ hơn.')) ?></p>
             </div>
             <?php if ($selectedCountryRow): ?>
-                <a class="tourism-selected-country" href="<?= music_h(music_url('music_tourism.php?country=' . rawurlencode($selectedCountry))) ?>">
+                <a class="tourism-selected-country" href="<?= music_h(music_country_url($selectedCountry)) ?>">
                     <?php if (!empty($selectedCountryRow['icon'])): ?><img src="<?= music_h($selectedCountryRow['icon']) ?>" alt="" loading="lazy"><?php endif; ?>
                     <span><?= music_h($selectedCountryRow['name'] ?? $selectedCountry) ?></span>
                 </a>
@@ -137,7 +144,7 @@ foreach ($countries as $country) {
         <h2><?= music_h(music_label('music.tourism.country_list', 'Điểm đến nổi bật')) ?></h2>
         <?php foreach (array_slice($countries, 0, 18) as $country): ?>
             <?php $countryCode = strtoupper((string) ($country['country_code'] ?? '')); ?>
-            <a class="tourism-country<?= $countryCode === $selectedCountry ? ' is-active' : '' ?>" href="<?= music_h(music_url('music_tourism.php?country=' . rawurlencode($countryCode))) ?>">
+            <a class="tourism-country<?= $countryCode === $selectedCountry ? ' is-active' : '' ?>" href="<?= music_h(music_country_url($countryCode)) ?>">
                 <?php if (!empty($country['icon'])): ?><img src="<?= music_h($country['icon']) ?>" alt="" loading="lazy"><?php endif; ?>
                 <span>
                     <strong><?= music_h($country['name'] ?? $countryCode) ?></strong>
@@ -193,7 +200,7 @@ foreach ($countries as $country) {
                 <?php else: ?>
                     <div class="artist-grid">
                         <?php foreach ($artists as $artist): ?>
-                            <a class="artist-card site-link" href="<?= music_h(music_artist_url((int) $artist['id'])) ?>">
+                            <a class="artist-card site-link" href="<?= music_h(music_artist_url((int) $artist['id'], (string) $artist['name'])) ?>">
                                 <img src="<?= music_h(music_cover($artist['avatar'] ?? '')) ?>" alt="<?= music_h($artist['name']) ?>">
                                 <span><strong><?= music_h($artist['name']) ?></strong><small><?= number_format((int) ($artist['song_count'] ?? 0)) ?> <?= music_h(music_label('music.label.songs', 'bài hát')) ?></small></span>
                             </a>

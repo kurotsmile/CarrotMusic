@@ -31,7 +31,7 @@ function music_social_login_callback_url(array $config): string
 
 function music_social_login_error(string $message): void
 {
-    header('Location: index.php?oauth_error=' . rawurlencode($message));
+    header('Location: ' . music_url_with_query(music_home_url(), ['oauth_error' => $message]));
     exit;
 }
 

@@ -2,6 +2,7 @@
 require_once __DIR__ . '/includes/music.php';
 
 $genreId = trim((string) ($_GET['id'] ?? ''));
+$genreSlug = trim((string) ($_GET['slug'] ?? ''));
 $genre = null;
 $songs = [];
 $currentPage = max(1, (int) ($_GET['page_no'] ?? 1));
@@ -10,13 +11,13 @@ $totalSongs = 0;
 $totalPages = 1;
 $errorMessage = $db_error ?? '';
 
-$renderGenrePagination = static function (string $genreId, int $currentPage, int $totalPages): string {
+$renderGenrePagination = static function (string $genreId, string $genreTitle, int $currentPage, int $totalPages): string {
     if ($totalPages <= 1) {
         return '';
     }
 
     $items = [];
-    $pageUrl = static fn(int $page): string => music_genre_url($genreId) . '&page_no=' . $page;
+    $pageUrl = static fn(int $page): string => music_url_with_query(music_genre_url($genreId, $genreTitle), ['page_no' => $page]);
     $items[] = '<a class="pagination-link' . ($currentPage <= 1 ? ' is-disabled' : '') . '" href="' . music_h($pageUrl(max(1, $currentPage - 1))) . '" aria-label="' . music_h(music_label('aria.previous_page', 'Previous page')) . '">&lsaquo;</a>';
 
     $start = max(1, $currentPage - 2);
@@ -42,8 +43,12 @@ $renderGenrePagination = static function (string $genreId, int $currentPage, int
     return '<nav class="music-pagination" aria-label="' . music_h(music_label('aria.pagination', 'Pagination')) . '">' . implode('', $items) . '</nav>';
 };
 
-if ($pdo instanceof PDO && $genreId !== '') {
+if ($pdo instanceof PDO && ($genreId !== '' || $genreSlug !== '')) {
     try {
+        if ($genreId === '' && $genreSlug !== '') {
+            $genre = music_fetch_genre_by_slug($pdo, $genreSlug);
+            $genreId = (string) ($genre['genre_id'] ?? '');
+        }
         $cacheKey = music_cache_key('music_genre_detail', [
             'id' => $genreId,
             'page' => $currentPage,
@@ -58,7 +63,7 @@ if ($pdo instanceof PDO && $genreId !== '') {
             $totalPages = max(1, (int) ($cachedGenre['total_pages'] ?? 1));
             $currentPage = min($currentPage, $totalPages);
         } else {
-            $genre = music_fetch_genre($pdo, $genreId);
+            $genre = $genre ?: music_fetch_genre($pdo, $genreId);
             if ($genre) {
                 $totalSongs = (int) ($genre['song_count'] ?? 0);
                 $totalPages = max(1, (int) ceil($totalSongs / $songsPerPage));
@@ -96,23 +101,27 @@ if ($pdo instanceof PDO && $genreId !== '') {
 
 if (!$genre) {
     http_response_code(404);
-    music_render_header(music_label('music.meta.genre_not_found_title', 'Không tìm thấy thể loại - CarrotMusic'), music_label('music.meta.genre_not_found_description', 'Thể loại không tồn tại hoặc chưa có bài hát.'));
+    music_render_header(music_label('music.meta.genre_not_found_title', 'Không tìm thấy thể loại - ' . music_brand_name()), music_label('music.meta.genre_not_found_description', 'Thể loại không tồn tại hoặc chưa có bài hát.'));
     echo '<section class="section"><div class="empty">' . music_h($errorMessage ?: music_label('music.error.genre_not_found', 'Không tìm thấy thể loại.')) . '</div></section>';
     music_render_footer();
     exit;
 }
 
 $genreTitle = trim((string) ($genre['title'] ?? '')) ?: (string) ($genre['genre_id'] ?? $genreId);
+music_redirect_to_canonical(music_genre_url((string) ($genre['genre_id'] ?? $genreId), $genreTitle), ['id', 'slug']);
 $description = music_excerpt($genre['description'] ?? '', 155);
 if ($description === '') {
-    $description = sprintf(music_label('music.genre.default_description', 'Khám phá các bài hát thuộc thể loại %s trên CarrotMusic.'), $genreTitle);
+    $description = sprintf(music_label('music.genre.default_description', 'Khám phá các bài hát thuộc thể loại %s trên ' . music_brand_name() . '.'), $genreTitle);
 }
 
 $genreAvatar = music_cover((string) ($genre['avatar'] ?? ''));
-music_render_header($genreTitle . ' - ' . music_label('music.genre.role', 'Thể loại') . ' | CarrotMusic', $description, $genreAvatar);
+music_render_header($genreTitle . ' - ' . music_label('music.genre.role', 'Thể loại') . ' | ' . music_brand_name(), $description, $genreAvatar);
 ?>
 <article class="detail">
-    <img class="detail-cover" src="<?= music_h($genreAvatar) ?>" alt="<?= music_h($genreTitle) ?>">
+    <aside class="detail-side">
+        <img class="detail-cover" src="<?= music_h($genreAvatar) ?>" alt="<?= music_h($genreTitle) ?>">
+        <?= music_app_banners() ?>
+    </aside>
     <div class="detail-main">
         <p class="eyebrow"><?= music_h(music_label('music.genre.eyebrow', 'Genre detail')) ?></p>
         <h1><?= music_h($genreTitle) ?></h1>
@@ -121,7 +130,7 @@ music_render_header($genreTitle . ' - ' . music_label('music.genre.role', 'Thể
             <span><?= number_format($totalSongs) ?> <?= music_h(music_label('music.label.songs', 'bài hát')) ?></span>
         </div>
         <div class="song-actions">
-            <?= music_detail_action_buttons($genreTitle, music_genre_url((string) ($genre['genre_id'] ?? $genreId))) ?>
+            <?= music_detail_action_buttons($genreTitle, music_genre_url((string) ($genre['genre_id'] ?? $genreId), $genreTitle)) ?>
         </div>
         <?php if (!empty($genre['description'])): ?>
             <div class="lyrics">
@@ -138,7 +147,7 @@ music_render_header($genreTitle . ' - ' . music_label('music.genre.role', 'Thể
             <p><?= music_h(music_label('music.genre.songs_intro', 'Khám phá những bài hát cùng màu sắc và lưu lại bản nhạc hợp gu của bạn.')) ?></p>
         </div>
     </div>
-    <?= $renderGenrePagination((string) ($genre['genre_id'] ?? $genreId), $currentPage, $totalPages) ?>
+    <?= $renderGenrePagination((string) ($genre['genre_id'] ?? $genreId), $genreTitle, $currentPage, $totalPages) ?>
     <div class="grid">
         <?php foreach ($songs as $song): ?>
             <?php $songArtist = $song['artist_names'] ?: $song['artist']; ?>
@@ -156,7 +165,7 @@ music_render_header($genreTitle . ' - ' . music_label('music.genre.role', 'Thể
         <?php endforeach; ?>
     </div>
     <?php if (!$songs): ?><div class="empty"><?= music_h(music_label('music.genre.no_songs', 'Thể loại này chưa có bài hát.')) ?></div><?php endif; ?>
-    <?= $renderGenrePagination((string) ($genre['genre_id'] ?? $genreId), $currentPage, $totalPages) ?>
+    <?= $renderGenrePagination((string) ($genre['genre_id'] ?? $genreId), $genreTitle, $currentPage, $totalPages) ?>
 </section>
 
 <script type="application/ld+json">
@@ -165,7 +174,7 @@ music_render_header($genreTitle . ' - ' . music_label('music.genre.role', 'Thể
     '@type' => 'CollectionPage',
     'name' => $genreTitle,
     'description' => $description,
-    'url' => music_genre_url((string) ($genre['genre_id'] ?? $genreId)),
+    'url' => music_genre_url((string) ($genre['genre_id'] ?? $genreId), $genreTitle),
 ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_PRETTY_PRINT) ?>
 </script>
 <?php music_render_footer(); ?>
