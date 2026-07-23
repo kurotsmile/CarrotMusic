@@ -57,8 +57,8 @@ if ($pdo instanceof PDO) {
                 $songs = music_fetch_songs($pdo, 24);
                 $localSongs = music_fetch_songs($pdo, 24, 'TRIM(COALESCE(s.lang, "")) = ?', [$localLang]);
                 try {
-                    $popularSongs = music_fetch_popular_songs($pdo, 18);
-                    $localPopularSongs = music_fetch_popular_songs($pdo, 18, 'TRIM(COALESCE(s.lang, "")) = ?', [$localLang]);
+                    $popularSongs = music_fetch_popular_songs($pdo, 24);
+                    $localPopularSongs = music_fetch_popular_songs($pdo, 24, 'TRIM(COALESCE(s.lang, "")) = ?', [$localLang]);
                 } catch (Throwable $popularError) {
                     error_log('music_fetch_popular_songs failed: ' . $popularError->getMessage());
                     $popularSongs = [];
@@ -74,7 +74,7 @@ if ($pdo instanceof PDO) {
                 LEFT JOIN song s ON FIND_IN_SET(REPLACE(g.genre_id, " ", ""), REPLACE(COALESCE(s.genre, ""), " ", "")) > 0
                 GROUP BY g.genre_id, g.title, g.avatar
                 ORDER BY RAND()
-                LIMIT 18
+                LIMIT 20
             ')->fetchAll();
             if ($searchQuery !== '') {
                 $artistStmt = $pdo->prepare('
@@ -161,10 +161,10 @@ $heroSlides = [
 $renderMusicModeSwitch = static function (string $sectionKey): void {
     ?>
     <div class="music-mode-switch" data-music-mode-switch="<?= music_h($sectionKey) ?>" role="group" aria-label="<?= music_h(music_label('aria.music_scope_switch', 'Chọn phạm vi bài hát')) ?>">
-        <button type="button" class="is-active" data-music-mode-button="world" aria-label="<?= music_h(music_label('music.mode.world', 'Thế giới')) ?>" title="<?= music_h(music_label('music.mode.world', 'Thế giới')) ?>">
+        <button type="button" class="is-active" data-music-mode-button="world" aria-label="<?= music_h(music_label('world', 'Thế giới')) ?>" title="<?= music_h(music_label('world', 'Thế giới')) ?>">
             <i class="fas fa-globe-asia" aria-hidden="true"></i>
         </button>
-        <button type="button" data-music-mode-button="local" aria-label="<?= music_h(music_label('music.mode.local', 'Địa phương')) ?>" title="<?= music_h(music_label('music.mode.local', 'Địa phương')) ?>">
+        <button type="button" data-music-mode-button="local" aria-label="<?= music_h(music_label('local', 'Địa phương')) ?>" title="<?= music_h(music_label('local', 'Địa phương')) ?>">
             <i class="fas fa-map-marker-alt" aria-hidden="true"></i>
         </button>
     </div>

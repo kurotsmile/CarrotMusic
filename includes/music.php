@@ -290,6 +290,12 @@ function music_artists_url(): string
     return music_url('artists');
 }
 
+function music_artists_country_url(string $countryCode): string
+{
+    $countryCode = strtoupper(trim($countryCode));
+    return music_url_with_query(music_artists_url(), ['country' => preg_match('/^[A-Z]{2}$/', $countryCode) ? $countryCode : '']);
+}
+
 function music_genres_url(): string
 {
     return music_url('genres');
@@ -892,6 +898,7 @@ function music_render_footer(): void
 cr_player.path = '<?= music_h(music_url('cr_player')) ?>';
 cr_player.onCreate('theme_basic_bottom');
 
+const musicEmailLoginEndpoint = <?= json_encode(music_url('login-email.php'), JSON_UNESCAPED_SLASHES) ?>;
 const musicOauthError = new URLSearchParams(window.location.search).get('oauth_error');
 if (musicOauthError) {
     Swal.fire({
@@ -938,7 +945,25 @@ document.addEventListener('click', async (event) => {
             title: <?= json_encode(music_label('login.title', 'Login'), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>,
             html: `
                 <div class="music-login-popup">
+                    <div class="music-login-brand">
+                        <img src="<?= music_h(music_url('carrot_28.png')) ?>" alt="<?= music_h(music_brand_name()) ?>">
+                    </div>
                     <p><?= music_h(music_label('login.intro', 'Sign in to your Carrot account.')) ?></p>
+                    <form class="music-login-form" data-music-email-login>
+                        <label>
+                            <span><?= music_h(music_label('label.email', 'Email')) ?></span>
+                            <input name="email" type="email" autocomplete="email" required>
+                        </label>
+                        <label>
+                            <span><?= music_h(music_label('label.password', 'Password')) ?></span>
+                            <input name="password" type="password" autocomplete="current-password" required>
+                        </label>
+                        <button class="music-login-submit" type="submit">
+                            <i class="fas fa-sign-in-alt" aria-hidden="true"></i>
+                            <span><?= music_h(music_label('nav.login', 'Login')) ?></span>
+                        </button>
+                        <div class="music-login-message" data-music-login-message aria-live="polite"></div>
+                    </form>
                     <div class="music-login-providers">
                         <a href="<?= music_h(music_url('social-login.php?provider=google')) ?>" aria-label="Google">
                             <svg viewBox="0 0 24 24" aria-hidden="true"><path fill="#4285f4" d="M21.6 12.2c0-.7-.1-1.3-.2-1.8H12v3.5h5.4c-.2 1.1-.9 2.1-1.9 2.7v2.2h3c1.8-1.6 3.1-3.9 3.1-6.6Z"/><path fill="#34a853" d="M12 22c2.7 0 5-.9 6.6-2.5l-3-2.2c-.8.5-1.9.9-3.6.9-2.6 0-4.8-1.7-5.6-4.1H3.3v2.3C4.9 19.7 8.2 22 12 22Z"/><path fill="#fbbc05" d="M6.4 14.1c-.2-.6-.3-1.3-.3-2.1s.1-1.4.3-2.1V7.6H3.3C2.5 8.9 2.1 10.4 2.1 12s.4 3.1 1.2 4.4l3.1-2.3Z"/><path fill="#ea4335" d="M12 5.8c1.5 0 2.8.5 3.8 1.5l2.8-2.8C17 2.9 14.7 2 12 2 8.2 2 4.9 4.3 3.3 7.6l3.1 2.3c.8-2.4 3-4.1 5.6-4.1Z"/></svg>
@@ -953,13 +978,16 @@ document.addEventListener('click', async (event) => {
                             <span>GitHub</span>
                         </a>
                     </div>
-                    <a class="music-login-email" href="../CarrotHome/login.php?redirect=${encodeURIComponent(window.location.href)}"><?= music_h(music_label('login.with_email', 'Login with email')) ?></a>
                 </div>
             `,
             showConfirmButton: false,
             showCloseButton: true,
             customClass: {popup: 'music-login-swal'},
             background: '#fff7f2',
+            didOpen: () => {
+                const emailField = Swal.getPopup()?.querySelector('input[name="email"]');
+                if (emailField) emailField.focus();
+            },
         });
         return;
     }
@@ -1027,6 +1055,46 @@ document.addEventListener('click', async (event) => {
             }
         },
     });
+});
+
+document.addEventListener('submit', async (event) => {
+    const form = event.target.closest('[data-music-email-login]');
+    if (!form) return;
+
+    event.preventDefault();
+    const submitButton = form.querySelector('.music-login-submit');
+    const message = form.querySelector('[data-music-login-message]');
+
+    if (submitButton) submitButton.disabled = true;
+    if (message) {
+        message.className = 'music-login-message';
+        message.textContent = <?= json_encode(music_label('login.processing', 'Đang đăng nhập...'), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>;
+    }
+
+    try {
+        const response = await fetch(musicEmailLoginEndpoint, {
+            method: 'POST',
+            body: new FormData(form),
+            headers: {'X-Requested-With': 'XMLHttpRequest'},
+        });
+        const payload = await response.json().catch(() => ({}));
+
+        if (!response.ok || !payload.ok) {
+            throw new Error(payload.message || <?= json_encode(music_label('login.error_invalid', 'Sai email hoặc mật khẩu.'), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>);
+        }
+
+        if (message) {
+            message.className = 'music-login-message is-success';
+            message.textContent = payload.message || <?= json_encode(music_label('login.success', 'Đăng nhập thành công.'), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>;
+        }
+        window.setTimeout(() => window.location.reload(), 350);
+    } catch (error) {
+        if (message) {
+            message.className = 'music-login-message is-error';
+            message.textContent = error.message || <?= json_encode(music_label('login.error_title', 'Không thể đăng nhập'), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>;
+        }
+        if (submitButton) submitButton.disabled = false;
+    }
 });
 
 const musicLanguageTemplate = (item) => {

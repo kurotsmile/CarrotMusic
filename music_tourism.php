@@ -198,16 +198,20 @@ foreach ($countries as $country) {
                 <?php if (!$artists): ?>
                     <div class="empty"><?= music_h(music_label('music.empty.artists_country', 'Chưa có nghệ sĩ cho điểm đến này.')) ?></div>
                 <?php else: ?>
-                    <div class="artist-grid">
-                        <?php foreach ($artists as $artist): ?>
-                            <a class="artist-card site-link" href="<?= music_h(music_artist_url((int) $artist['id'], (string) $artist['name'])) ?>">
-                                <img src="<?= music_h(music_cover($artist['avatar'] ?? '')) ?>" alt="<?= music_h($artist['name']) ?>">
-                                <span><strong><?= music_h($artist['name']) ?></strong><small><?= number_format((int) ($artist['song_count'] ?? 0)) ?> <?= music_h(music_label('music.label.songs', 'bài hát')) ?></small></span>
-                            </a>
-                        <?php endforeach; ?>
-                    </div>
-                <?php endif; ?>
-            </div>
+	                    <div class="artist-grid">
+	                        <?php foreach ($artists as $artist): ?>
+	                            <a class="artist-card site-link" href="<?= music_h(music_artist_url((int) $artist['id'], (string) $artist['name'])) ?>">
+	                                <img src="<?= music_h(music_cover($artist['avatar'] ?? '')) ?>" alt="<?= music_h($artist['name']) ?>">
+	                                <span><strong><?= music_h($artist['name']) ?></strong><small><?= number_format((int) ($artist['song_count'] ?? 0)) ?> <?= music_h(music_label('music.label.songs', 'bài hát')) ?></small></span>
+	                            </a>
+	                        <?php endforeach; ?>
+	                    </div>
+	                    <a class="tourism-view-all" href="<?= music_h(music_artists_country_url($selectedCountry)) ?>">
+	                        <span><?= music_h(music_label('action.view_all', 'Xem tất cả')) ?></span>
+	                        <i class="fas fa-arrow-right" aria-hidden="true"></i>
+	                    </a>
+	                <?php endif; ?>
+	            </div>
         </div>
     <?php endif; ?>
 </section>

@@ -1,6 +1,12 @@
 <?php
 require_once __DIR__ . '/includes/music.php';
 
+$artistCountryFilter = strtoupper(trim((string) ($_GET['country'] ?? ($_GET['c'] ?? ''))));
+if ($artistCountryFilter !== '' && preg_match('/^[A-Z]{2}$/', $artistCountryFilter)) {
+    header('Location: ' . music_artists_country_url($artistCountryFilter), true, 301);
+    exit;
+}
+
 $artistId = (int) ($_GET['id'] ?? 0);
 $artistSlug = trim((string) ($_GET['slug'] ?? ''));
 $artist = null;

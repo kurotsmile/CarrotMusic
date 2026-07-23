@@ -5,6 +5,10 @@ $songId = trim((string) ($_GET['id'] ?? ''));
 $song = null;
 $songArtists = [];
 $relatedSongs = [];
+$relatedScope = strtolower(trim((string) ($_GET['related_scope'] ?? 'local')));
+if (!in_array($relatedScope, ['local', 'world'], true)) {
+    $relatedScope = 'local';
+}
 $songViewCount = 0;
 $paypalConfig = music_paypal_config($pdo ?? null, 'music');
 $errorMessage = $db_error ?? '';
@@ -20,18 +24,33 @@ if ($pdo instanceof PDO && $songId !== '') {
             $relatedConditions = [];
             $relatedParams = [$songId];
             $songLang = trim((string) ($song['lang'] ?? ''));
-            foreach ($relatedGenreIds as $genreIndex => $genreId) {
+            foreach ($relatedGenreIds as $genreId) {
                 $relatedConditions[] = 'FIND_IN_SET(?, REPLACE(COALESCE(s.genre, \'\'), \' \', \'\')) > 0';
                 $relatedParams[] = $genreId;
             }
-            $relatedConditions[] = 's.artist = ?';
-            $relatedParams[] = (string) ($song['artist'] ?? '');
-            $relatedWhere = 's.id <> ? AND (' . implode(' OR ', $relatedConditions) . ')';
-            if ($songLang !== '') {
+            if ($relatedConditions) {
+                $relatedWhere = 's.id <> ? AND (' . implode(' OR ', $relatedConditions) . ')';
+            } else {
+                $relatedWhere = 's.id <> ? AND TRIM(COALESCE(s.artist, \'\')) = ?';
+                $relatedParams[] = (string) ($song['artist'] ?? '');
+            }
+            if ($relatedScope === 'local' && $songLang !== '') {
                 $relatedWhere .= ' AND TRIM(COALESCE(s.lang, \'\')) = ?';
                 $relatedParams[] = $songLang;
             }
-            $relatedSongs = music_fetch_songs($pdo, 14, $relatedWhere, $relatedParams);
+            $relatedSql = '
+                SELECT s.*, GROUP_CONCAT(DISTINCT sa.name ORDER BY sa.name SEPARATOR ", ") AS artist_names
+                FROM song s
+                LEFT JOIN song_artist_map sam ON sam.song_id = s.id
+                LEFT JOIN song_artist sa ON sa.id = sam.artist_id
+                WHERE ' . $relatedWhere . '
+                GROUP BY s.id
+                ORDER BY RAND()
+                LIMIT 16
+            ';
+            $relatedStmt = $pdo->prepare($relatedSql);
+            $relatedStmt->execute($relatedParams);
+            $relatedSongs = $relatedStmt->fetchAll();
         }
     } catch (Throwable $e) {
         $errorMessage = $e->getMessage();
@@ -192,9 +211,19 @@ music_render_header($title, $description, music_cover($song['avatar']));
 </div>
 <?php endif; ?>
 
-<?php if ($relatedSongs): ?>
+<?php if ($relatedSongs || $songGenreTags): ?>
 <section class="section">
-    <div class="section-head"><div><h2><?= music_h(music_label('music.related_songs', 'Bài liên quan')) ?></h2><p><?= music_h(music_label('music.related_songs_intro', 'Tiếp tục khám phá những giai điệu có cùng cảm xúc.')) ?></p></div></div>
+    <div class="section-head">
+        <div>
+            <h2><?= music_h(music_label('music.related_songs', 'Bài liên quan')) ?></h2>
+            <p><?= music_h(music_label('music.related_songs_intro', 'Tiếp tục khám phá những giai điệu cùng thể loại.')) ?></p>
+        </div>
+        <nav class="music-mode-switch music-related-switch" aria-label="<?= music_h(music_label('music.related_scope', 'Related song scope')) ?>">
+            <a class="<?= $relatedScope === 'local' ? 'is-active' : '' ?>" href="<?= music_h(music_url_with_query(music_song_url((string) $song['id']), ['related_scope' => 'local'])) ?>"><?= music_h(music_label('local', 'Cục bộ')) ?></a>
+            <a class="<?= $relatedScope === 'world' ? 'is-active' : '' ?>" href="<?= music_h(music_url_with_query(music_song_url((string) $song['id']), ['related_scope' => 'world'])) ?>"><?= music_h(music_label('world', 'Thế giới')) ?></a>
+        </nav>
+    </div>
+    <?php if ($relatedSongs): ?>
     <div class="grid">
         <?php foreach ($relatedSongs as $related): ?>
             <article class="song-card">
@@ -210,6 +239,9 @@ music_render_header($title, $description, music_cover($song['avatar']));
             </article>
         <?php endforeach; ?>
     </div>
+    <?php else: ?>
+        <div class="empty"><?= music_h(music_label('music.related_songs_empty', 'Chưa có bài liên quan trong phạm vi này.')) ?></div>
+    <?php endif; ?>
 </section>
 <?php endif; ?>
 
@@ -421,7 +453,17 @@ music_render_header($title, $description, music_cover($song['avatar']));
         }, 260);
     };
 
+    const pauseSiteAudio = () => {
+        if (!window.cr_player || !cr_player.audio_player || cr_player.audio_player.paused) return;
+        if (typeof cr_player.pause === 'function') {
+            cr_player.pause();
+            return;
+        }
+        cr_player.audio_player.pause();
+    };
+
     const openVideo = async () => {
+        pauseSiteAudio();
         modal.classList.add('is-open');
         modal.setAttribute('aria-hidden', 'false');
         document.body.classList.add('music-video-open');
