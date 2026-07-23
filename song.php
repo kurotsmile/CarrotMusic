@@ -219,8 +219,19 @@ music_render_header($title, $description, music_cover($song['avatar']));
             <p><?= music_h(music_label('music.related_songs_intro', 'Tiếp tục khám phá những giai điệu cùng thể loại.')) ?></p>
         </div>
         <nav class="music-mode-switch music-related-switch" aria-label="<?= music_h(music_label('music.related_scope', 'Related song scope')) ?>">
-            <a class="<?= $relatedScope === 'local' ? 'is-active' : '' ?>" href="<?= music_h(music_url_with_query(music_song_url((string) $song['id']), ['related_scope' => 'local'])) ?>"><?= music_h(music_label('local', 'Cục bộ')) ?></a>
-            <a class="<?= $relatedScope === 'world' ? 'is-active' : '' ?>" href="<?= music_h(music_url_with_query(music_song_url((string) $song['id']), ['related_scope' => 'world'])) ?>"><?= music_h(music_label('world', 'Thế giới')) ?></a>
+            <a class="<?= $relatedScope === 'local' ? 'is-active' : '' ?>"
+            style="display:inline-flex;align-items:center;gap:6px;white-space:nowrap;"
+            href="<?= music_h(music_url_with_query(music_song_url((string) $song['id']), ['related_scope' => 'local'])) ?>">
+                <i class="fas fa-map-marker-alt" aria-hidden="true" style="font-size:14px;line-height:1;"></i>
+                <?= music_h(music_label('local', 'Cục bộ')) ?>
+            </a>
+
+            <a class="<?= $relatedScope === 'world' ? 'is-active' : '' ?>"
+            style="display:inline-flex;align-items:center;gap:6px;white-space:nowrap;"
+            href="<?= music_h(music_url_with_query(music_song_url((string) $song['id']), ['related_scope' => 'world'])) ?>">
+                <i class="fas fa-globe-asia" aria-hidden="true" style="font-size:14px;line-height:1;"></i>
+                <?= music_h(music_label('world', 'Thế giới')) ?>
+            </a>
         </nav>
     </div>
     <?php if ($relatedSongs): ?>
