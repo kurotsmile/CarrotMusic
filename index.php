@@ -263,8 +263,8 @@ $renderSongGrid = static function (array $items, string $emptyLabel, bool $ranke
 <section class="section" data-music-mode-section="new_songs">
     <div class="section-head">
         <div>
-            <h2><?= music_h($searchQuery !== '' ? music_label('music.section.search_results', 'Kết quả tìm kiếm') : music_label('music.new_songs', 'New song')) ?></h2>
-            <p><?= music_h($searchQuery !== '' ? sprintf(music_label('music.section.search_hint', 'Từ khóa: "%s"'), $searchQuery) : music_label('music.new_songs_intro', 'Chọn một bài để nghe ngay hoặc lưu vào danh sách yêu thích của bạn.')) ?></p>
+            <h2><?= music_h($searchQuery !== '' ? music_label('music.search_results', 'Kết quả tìm kiếm') : music_label('music.new_songs', 'New song')) ?></h2>
+            <p><?= music_h($searchQuery !== '' ? sprintf(music_label('music.search_hint', 'Từ khóa: "%s"'), $searchQuery) : music_label('music.new_songs_intro', 'Chọn một bài để nghe ngay hoặc lưu vào danh sách yêu thích của bạn.')) ?></p>
         </div>
         <?php if ($searchQuery === ''): ?><?php $renderMusicModeSwitch('new_songs'); ?><?php endif; ?>
     </div>
