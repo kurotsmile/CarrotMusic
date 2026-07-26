@@ -25,6 +25,35 @@ function music_visit_request_path(): string
     return substr((string) ($_SERVER['REQUEST_URI'] ?? ($_SERVER['SCRIPT_NAME'] ?? '')), 0, 1024);
 }
 
+function music_visit_country_code(string $ip): string
+{
+    foreach (['HTTP_CF_IPCOUNTRY', 'HTTP_X_VERCEL_IP_COUNTRY', 'HTTP_CLOUDFRONT_VIEWER_COUNTRY', 'HTTP_X_APPENGINE_COUNTRY', 'GEOIP_COUNTRY_CODE'] as $key) {
+        $value = strtoupper(trim((string) ($_SERVER[$key] ?? '')));
+        if (preg_match('/^[A-Z]{2}$/', $value) && $value !== 'XX') {
+            return $value;
+        }
+    }
+    if (!filter_var($ip, FILTER_VALIDATE_IP, FILTER_FLAG_NO_PRIV_RANGE | FILTER_FLAG_NO_RES_RANGE)) {
+        return '';
+    }
+    $url = 'https://ipapi.co/' . rawurlencode($ip) . '/country/';
+    $response = '';
+    if (function_exists('curl_init')) {
+        $ch = curl_init($url);
+        curl_setopt_array($ch, [CURLOPT_RETURNTRANSFER => true, CURLOPT_CONNECTTIMEOUT => 1, CURLOPT_TIMEOUT => 2, CURLOPT_USERAGENT => 'CarrotVisitTracker/1.0']);
+        $response = (string) curl_exec($ch);
+        $status = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        curl_close($ch);
+        if ($status >= 400) {
+            $response = '';
+        }
+    } elseif (ini_get('allow_url_fopen')) {
+        $response = (string) @file_get_contents($url, false, stream_context_create(['http' => ['timeout' => 2, 'header' => "User-Agent: CarrotVisitTracker/1.0\r\n"]]));
+    }
+    $countryCode = strtoupper(trim($response));
+    return preg_match('/^[A-Z]{2}$/', $countryCode) ? $countryCode : '';
+}
+
 function music_visit_ensure_tracking_tables(PDO $pdo, string $site): void
 {
     $site = preg_replace('/[^a-z0-9_-]/i', '', $site) ?: 'web';
@@ -38,6 +67,7 @@ function music_visit_ensure_tracking_tables(PDO $pdo, string $site): void
           first_seen_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
           last_seen_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
           hits INT UNSIGNED NOT NULL DEFAULT 1,
+          country_code CHAR(2) DEFAULT NULL,
           user_agent VARCHAR(512) DEFAULT NULL,
           referer VARCHAR(1024) DEFAULT NULL,
           request_path VARCHAR(1024) DEFAULT NULL,
@@ -46,6 +76,7 @@ function music_visit_ensure_tracking_tables(PDO $pdo, string $site): void
           PRIMARY KEY (id),
           UNIQUE KEY uq_visit_daily_ip (site, visit_date, ip_address),
           KEY idx_visit_site_date (site, visit_date),
+          KEY idx_visit_country_date (country_code, visit_date),
           KEY idx_visit_date (visit_date),
           KEY idx_visit_last_seen_at (last_seen_at)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
@@ -61,6 +92,7 @@ function music_visit_ensure_tracking_tables(PDO $pdo, string $site): void
           first_seen_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
           last_seen_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
           hits INT UNSIGNED NOT NULL DEFAULT 1,
+          country_code CHAR(2) DEFAULT NULL,
           user_agent VARCHAR(512) DEFAULT NULL,
           referer VARCHAR(1024) DEFAULT NULL,
           request_path VARCHAR(1024) DEFAULT NULL,
@@ -69,10 +101,12 @@ function music_visit_ensure_tracking_tables(PDO $pdo, string $site): void
           PRIMARY KEY (id),
           UNIQUE KEY uq_visit_hourly_ip (site, visit_date, visit_hour, ip_address),
           KEY idx_visit_hourly_site_date_hour (site, visit_date, visit_hour),
+          KEY idx_visit_hourly_country_date (country_code, visit_date),
           KEY idx_visit_hourly_date_hour (visit_date, visit_hour),
           KEY idx_visit_hourly_last_seen_at (last_seen_at)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
     ");
+
 }
 
 function music_visit_track_daily_ip(?PDO $pdo): void
@@ -91,15 +125,17 @@ function music_visit_track_daily_ip(?PDO $pdo): void
         $visitDate = date('Y-m-d');
         $seenAt = date('Y-m-d H:i:s');
         $visitHour = (int) date('G');
+        $countryCode = music_visit_country_code($ip);
         $stmt = $pdo->prepare("
             INSERT INTO visit_daily_ip (
               site, visit_date, ip_address, ip_text, first_seen_at, last_seen_at,
-              hits, user_agent, referer, request_path
+              hits, country_code, user_agent, referer, request_path
             )
-            VALUES ('music', :visit_date, INET6_ATON(:ip), :ip_text, :first_seen_at, :last_seen_at, 1, :user_agent, :referer, :request_path)
+            VALUES ('music', :visit_date, INET6_ATON(:ip), :ip_text, :first_seen_at, :last_seen_at, 1, :country_code, :user_agent, :referer, :request_path)
             ON DUPLICATE KEY UPDATE
               hits = hits + 1,
               last_seen_at = VALUES(last_seen_at),
+              country_code = COALESCE(VALUES(country_code), country_code),
               user_agent = VALUES(user_agent),
               referer = VALUES(referer),
               request_path = VALUES(request_path),
@@ -111,6 +147,7 @@ function music_visit_track_daily_ip(?PDO $pdo): void
             ':last_seen_at' => $seenAt,
             ':ip' => $ip,
             ':ip_text' => $ip,
+            ':country_code' => $countryCode !== '' ? $countryCode : null,
             ':user_agent' => substr((string) ($_SERVER['HTTP_USER_AGENT'] ?? ''), 0, 512) ?: null,
             ':referer' => substr((string) ($_SERVER['HTTP_REFERER'] ?? ''), 0, 1024) ?: null,
             ':request_path' => music_visit_request_path(),
@@ -124,12 +161,13 @@ function music_visit_track_daily_ip(?PDO $pdo): void
         $hourlyStmt = $pdo->prepare("
             INSERT INTO visit_hourly_ip (
               site, visit_date, visit_hour, ip_address, ip_text, first_seen_at, last_seen_at,
-              hits, user_agent, referer, request_path
+              hits, country_code, user_agent, referer, request_path
             )
-            VALUES ('music', :visit_date, :visit_hour, INET6_ATON(:ip), :ip_text, :first_seen_at, :last_seen_at, 1, :user_agent, :referer, :request_path)
+            VALUES ('music', :visit_date, :visit_hour, INET6_ATON(:ip), :ip_text, :first_seen_at, :last_seen_at, 1, :country_code, :user_agent, :referer, :request_path)
             ON DUPLICATE KEY UPDATE
               hits = hits + 1,
               last_seen_at = VALUES(last_seen_at),
+              country_code = COALESCE(VALUES(country_code), country_code),
               user_agent = VALUES(user_agent),
               referer = VALUES(referer),
               request_path = VALUES(request_path),
@@ -142,6 +180,7 @@ function music_visit_track_daily_ip(?PDO $pdo): void
             ':last_seen_at' => $seenAt,
             ':ip' => $ip,
             ':ip_text' => $ip,
+            ':country_code' => $countryCode !== '' ? $countryCode : null,
             ':user_agent' => substr((string) ($_SERVER['HTTP_USER_AGENT'] ?? ''), 0, 512) ?: null,
             ':referer' => substr((string) ($_SERVER['HTTP_REFERER'] ?? ''), 0, 1024) ?: null,
             ':request_path' => music_visit_request_path(),

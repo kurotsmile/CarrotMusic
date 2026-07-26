@@ -119,10 +119,13 @@ music_render_header($title, $description, music_cover($song['avatar']));
         <h1><?= music_h($song['name']) ?></h1>
         <div class="detail-meta">
             <?php if (!$songArtists): ?>
-                <span><?= music_h($artistName) ?></span>
+                <span>
+                    <i class="fab fa-grav"></i>
+                    <?= music_h($artistName) ?>
+                </span>
             <?php else: ?>
                 <?php foreach ($songArtists as $artist): ?>
-                    <span><a class="artist-tag site-link" href="<?= music_h(music_artist_url((int) $artist['id'], (string) $artist['name'])) ?>"><?= music_h($artist['name']) ?></a></span>
+                    <span><a class="artist-tag site-link" href="<?= music_h(music_artist_url((int) $artist['id'], (string) $artist['name'])) ?>"><i class="fab fa-grav"></i> <?= music_h($artist['name']) ?></a></span>
                 <?php endforeach; ?>
             <?php endif; ?>
             <?php if ($songAlbum !== ''): ?>
@@ -183,12 +186,18 @@ music_render_header($title, $description, music_cover($song['avatar']));
         ?>
 
         <?php if ($lyrics): ?>
-        <div class="lyrics">
-        <?=
-            $lyrics !== strip_tags($lyrics)
-                ? $lyrics
-                : nl2br(htmlspecialchars($lyrics, ENT_QUOTES, 'UTF-8'));
-        ?>
+        <div class="lyrics song-lyrics-shell is-collapsed" data-song-lyrics>
+            <div class="song-lyrics-content" data-song-lyrics-content>
+            <?=
+                $lyrics !== strip_tags($lyrics)
+                    ? $lyrics
+                    : nl2br(htmlspecialchars($lyrics, ENT_QUOTES, 'UTF-8'));
+            ?>
+            </div>
+            <button class="song-lyrics-toggle" type="button" data-song-lyrics-toggle aria-expanded="false">
+                <span><?= music_h(music_label('music.lyrics.show_more', 'Xem thêm lời bài hát')) ?></span>
+                <i class="fas fa-chevron-down" aria-hidden="true"></i>
+            </button>
         </div>
         <?php endif; ?>
     </div>
@@ -254,6 +263,36 @@ music_render_header($title, $description, music_cover($song['avatar']));
         <div class="empty"><?= music_h(music_label('music.related_songs_empty', 'Chưa có bài liên quan trong phạm vi này.')) ?></div>
     <?php endif; ?>
 </section>
+<?php endif; ?>
+
+<?php if ($lyrics): ?>
+<script>
+(() => {
+    const shell = document.querySelector('[data-song-lyrics]');
+    const content = shell?.querySelector('[data-song-lyrics-content]');
+    const toggle = shell?.querySelector('[data-song-lyrics-toggle]');
+    if (!shell || !content || !toggle) return;
+
+    const collapsedHeight = parseFloat(getComputedStyle(content).getPropertyValue('--lyrics-collapsed-height')) || 260;
+    const isOverflowing = () => content.scrollHeight > collapsedHeight + 12;
+
+    if (!isOverflowing()) {
+        shell.classList.remove('is-collapsed');
+        shell.classList.add('is-short');
+        toggle.hidden = true;
+        return;
+    }
+
+    toggle.addEventListener('click', () => {
+        const isExpanded = shell.classList.toggle('is-expanded');
+        shell.classList.toggle('is-collapsed', !isExpanded);
+        toggle.setAttribute('aria-expanded', isExpanded ? 'true' : 'false');
+        toggle.querySelector('span').textContent = isExpanded
+            ? <?= json_encode(music_label('music.lyrics.show_less', 'Thu gọn lời bài hát'), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>
+            : <?= json_encode(music_label('music.lyrics.show_more', 'Xem thêm lời bài hát'), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>;
+    });
+})();
+</script>
 <?php endif; ?>
 
 <?php if (!empty($song['mp3'])): ?>

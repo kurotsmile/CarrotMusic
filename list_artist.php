@@ -15,6 +15,7 @@ $errorMessage = $db_error ?? '';
 $currentPage = max(1, (int) ($_GET['page_no'] ?? 1));
 $perPage = 48;
 $totalArtists = 0;
+$totalCountryArtists = 0;
 $totalPages = 1;
 
 if ($pdo instanceof PDO) {
@@ -34,6 +35,7 @@ if ($pdo instanceof PDO) {
             HAVING artist_count > 0
             ORDER BY artist_count DESC, name ASC
         ')->fetchAll();
+        $totalCountryArtists = array_sum(array_map(static fn(array $country): int => (int) ($country['artist_count'] ?? 0), $countries));
 
         foreach ($countries as $country) {
             if ($selectedCountry !== '' && strtoupper((string) ($country['country_code'] ?? '')) === $selectedCountry) {
@@ -131,30 +133,41 @@ music_render_header($artistListTitle, $artistListDescription);
         </div>
     </div>
     <?php if ($countries): ?>
-        <div class="artist-country-filter" aria-label="<?= music_h(music_label('music.filter.artist_country', 'Lọc nghệ sĩ theo quốc gia')) ?>">
-            <a class="<?= $selectedCountry === '' ? 'is-active' : '' ?>" href="<?= music_h(music_artists_url()) ?>">
-                <span class="artist-country-icon"><?= music_tourism_icon() ?></span>
-                <strong><?= music_h(music_label('music.filter.all_countries', 'Tất cả quốc gia')) ?></strong>
-            </a>
-            <?php foreach ($countries as $country): ?>
-                <?php
-                $countryCode = strtoupper((string) ($country['country_code'] ?? ''));
-                if ($countryCode === '') {
-                    continue;
-                }
-                ?>
-                <a class="<?= $countryCode === $selectedCountry ? 'is-active' : '' ?>" href="<?= music_h(music_artists_country_url($countryCode)) ?>">
-                    <?php if (!empty($country['icon'])): ?>
-                        <img src="<?= music_h($country['icon']) ?>" alt="" loading="lazy">
-                    <?php else: ?>
-                        <span class="artist-country-icon"><?= music_h($countryCode) ?></span>
-                    <?php endif; ?>
+        <div class="artist-country-slider" data-artist-country-slider>
+            <button class="artist-country-nav artist-country-nav--prev" type="button" aria-label="<?= music_h(music_label('action.previous', 'Trước')) ?>">
+                <i class="fas fa-chevron-left"></i>
+            </button>
+            <div class="artist-country-filter" aria-label="<?= music_h(music_label('music.filter.artist_country', 'Lọc nghệ sĩ theo quốc gia')) ?>">
+                <a class="<?= $selectedCountry === '' ? 'is-active' : '' ?>" href="<?= music_h(music_artists_url()) ?>">
+                    <span class="artist-country-icon"><?= music_tourism_icon() ?></span>
                     <span>
-                        <strong><?= music_h($country['name'] ?? $countryCode) ?></strong>
-                        <small><?= number_format((int) ($country['artist_count'] ?? 0)) ?> <?= music_h(music_label('music.label.artists', 'nghệ sĩ')) ?></small>
+                        <strong><?= music_h(music_label('music.filter.all_countries', 'Tất cả quốc gia')) ?></strong>
+                        <small><?= number_format($totalCountryArtists) ?> <?= music_h(music_label('music.label.artists', 'nghệ sĩ')) ?></small>
                     </span>
                 </a>
-            <?php endforeach; ?>
+                <?php foreach ($countries as $country): ?>
+                    <?php
+                    $countryCode = strtoupper((string) ($country['country_code'] ?? ''));
+                    if ($countryCode === '') {
+                        continue;
+                    }
+                    ?>
+                    <a class="<?= $countryCode === $selectedCountry ? 'is-active' : '' ?>" href="<?= music_h(music_artists_country_url($countryCode)) ?>">
+                        <?php if (!empty($country['icon'])): ?>
+                            <img src="<?= music_h($country['icon']) ?>" alt="" loading="lazy">
+                        <?php else: ?>
+                            <span class="artist-country-icon"><?= music_h($countryCode) ?></span>
+                        <?php endif; ?>
+                        <span>
+                            <strong><?= music_h($country['name'] ?? $countryCode) ?></strong>
+                            <small><?= number_format((int) ($country['artist_count'] ?? 0)) ?> <?= music_h(music_label('music.label.artists', 'nghệ sĩ')) ?></small>
+                        </span>
+                    </a>
+                <?php endforeach; ?>
+            </div>
+            <button class="artist-country-nav artist-country-nav--next" type="button" aria-label="<?= music_h(music_label('action.next', 'Tiếp')) ?>">
+                <i class="fas fa-chevron-right"></i>
+            </button>
         </div>
     <?php endif; ?>
     <?php if ($errorMessage): ?><div class="empty"><?= music_h($errorMessage) ?></div><?php endif; ?>
@@ -170,4 +183,37 @@ music_render_header($artistListTitle, $artistListDescription);
     <?php if (!$artists && !$errorMessage): ?><div class="empty"><?= music_h(music_label('music.empty.no_artists', 'Chưa có nghệ sĩ.')) ?></div><?php endif; ?>
     <?= music_render_pagination($currentPage, $totalPages, static fn(int $page): string => music_url_with_query(music_artists_url(), ['country' => $selectedCountry, 'page_no' => $page])) ?>
 </section>
+<script>
+document.querySelectorAll('[data-artist-country-slider]').forEach((slider) => {
+    const track = slider.querySelector('.artist-country-filter');
+    const prev = slider.querySelector('.artist-country-nav--prev');
+    const next = slider.querySelector('.artist-country-nav--next');
+    if (!track || !prev || !next) {
+        return;
+    }
+
+    const updateButtons = () => {
+        const maxScroll = track.scrollWidth - track.clientWidth - 2;
+        prev.disabled = track.scrollLeft <= 2;
+        next.disabled = track.scrollLeft >= maxScroll;
+        slider.classList.toggle('is-start', prev.disabled);
+        slider.classList.toggle('is-end', next.disabled);
+    };
+
+    const scrollByGroup = (direction) => {
+        track.scrollBy({
+            left: direction * Math.max(220, Math.floor(track.clientWidth * 0.86)),
+            behavior: 'smooth',
+        });
+    };
+
+    prev.addEventListener('click', () => scrollByGroup(-1));
+    next.addEventListener('click', () => scrollByGroup(1));
+    track.addEventListener('scroll', updateButtons, { passive: true });
+    window.addEventListener('resize', updateButtons);
+
+    track.querySelector('.is-active')?.scrollIntoView({ inline: 'center', block: 'nearest' });
+    requestAnimationFrame(updateButtons);
+});
+</script>
 <?php music_render_footer(); ?>

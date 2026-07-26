@@ -100,7 +100,8 @@ mark{display:inline;padding:.08em .34em;border-radius:6px;background:linear-grad
 .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:16px}
 .song-card{container-type:inline-size;position:relative;display:flex;flex-direction:column;min-width:0;border:1px solid var(--line);border-radius:8px;background:var(--card);overflow:hidden;box-shadow:0 12px 28px rgba(74,27,12,.07)}
 .song-card:hover{border-color:#ffb088;box-shadow:0 18px 42px rgba(255,106,0,.16)}
-.song-card img{width:100%;aspect-ratio:1/1;object-fit:cover;background:#ffe2d1}
+.song-card img{width:100%;aspect-ratio:1/1;object-fit:cover;background:#ffe2d1;transform:scale(1);transition:transform .32s ease,filter .32s ease}
+.song-card:hover img,.song-card:focus-within img{filter:saturate(1.08);transform:scale(1.07)}
 .song-card > a:first-child{display:block;min-width:0;overflow:hidden}
 .song-card-cover{position:relative;display:block;min-width:0;overflow:hidden}
 .song-rank-badge{position:absolute;top:10px;left:10px;z-index:1;display:inline-flex;align-items:center;gap:5px;min-height:30px;padding:0 10px;border:1px solid rgba(255,255,255,.52);border-radius:999px;background:rgba(16,11,9,.78);color:#fff;font-size:12px;font-weight:950;line-height:1;box-shadow:0 10px 24px rgba(16,11,9,.28);backdrop-filter:blur(8px)}
@@ -158,13 +159,25 @@ mark{display:inline;padding:.08em .34em;border-radius:6px;background:linear-grad
 .artist-card img{width:58px;height:58px;object-fit:cover;border-radius:50%;background:#ffe2d1}
 .artist-card strong{display:block}
 .artist-card span{color:var(--muted);font-size:13px}
-.artist-country-filter{display:flex;gap:10px;margin:0 0 18px;padding:6px;overflow:auto;border:1px solid var(--line);border-radius:8px;background:#fff}
-.artist-country-filter a{display:grid;grid-template-columns:34px max-content;gap:9px;align-items:center;flex:0 0 auto;min-height:46px;padding:6px 10px;border:1px solid transparent;border-radius:8px;color:#4f2418;text-decoration:none}
+.artist-country-slider{position:relative;display:grid;grid-template-columns:42px minmax(0,1fr) 42px;gap:8px;align-items:stretch;margin:0 0 18px}
+.artist-country-slider::before,.artist-country-slider::after{position:absolute;top:7px;bottom:7px;z-index:2;width:34px;content:"";pointer-events:none;transition:opacity .18s ease}
+.artist-country-slider::before{left:50px;background:linear-gradient(90deg,#fff,rgba(255,255,255,0))}
+.artist-country-slider::after{right:50px;background:linear-gradient(270deg,#fff,rgba(255,255,255,0))}
+.artist-country-slider.is-start::before,.artist-country-slider.is-end::after{opacity:0}
+.artist-country-nav{display:grid;place-items:center;width:42px;min-height:62px;border:1px solid #ffc3a5;border-radius:8px;background:linear-gradient(135deg,#fff 0,#fff7f2 58%,#ffd0a8 100%);color:#8a1f11;cursor:pointer;box-shadow:0 10px 24px rgba(255,106,0,.09)}
+.artist-country-nav:hover{border-color:var(--accent);background:linear-gradient(135deg,var(--accent),var(--accent-2));color:#fff;box-shadow:0 14px 30px rgba(255,106,0,.18)}
+.artist-country-nav:disabled{cursor:default;opacity:.42;box-shadow:none}
+.artist-country-nav:disabled:hover{border-color:#ffc3a5;background:linear-gradient(135deg,#fff 0,#fff7f2 58%,#ffd0a8 100%);color:#8a1f11}
+.artist-country-filter{display:flex;gap:10px;min-width:0;padding:7px;overflow:auto;scroll-behavior:smooth;scroll-snap-type:x mandatory;scrollbar-width:none;border:1px solid var(--line);border-radius:8px;background:#fff;box-shadow:0 12px 28px rgba(74,27,12,.06)}
+.artist-country-filter::-webkit-scrollbar{display:none}
+.artist-country-filter a{position:relative;display:grid;grid-template-columns:38px minmax(112px,1fr);gap:10px;align-items:center;flex:0 0 clamp(176px,19vw,236px);min-height:58px;padding:8px 11px;border:1px solid transparent;border-radius:8px;color:#4f2418;text-decoration:none;scroll-snap-align:start}
 .artist-country-filter a:hover,.artist-country-filter a.is-active{border-color:#ffc3a5;background:#fff7f2;color:#8a1f11}
-.artist-country-filter img,.artist-country-icon{display:grid;place-items:center;width:34px;height:34px;border-radius:999px;background:#ffe2d1;color:var(--accent);font-size:12px;font-weight:950;object-fit:cover;overflow:hidden}
-.artist-country-icon .tourism-icon{width:18px;height:18px}
+.artist-country-filter a.is-active{box-shadow:inset 0 0 0 1px rgba(255,106,0,.18),0 10px 22px rgba(255,106,0,.1)}
+.artist-country-filter a.is-active::after{position:absolute;right:10px;top:10px;width:8px;height:8px;border-radius:999px;background:linear-gradient(135deg,var(--accent),var(--accent-2));content:"";box-shadow:0 0 0 4px rgba(255,106,0,.12)}
+.artist-country-filter img,.artist-country-icon{display:grid;place-items:center;width:38px;height:38px;border-radius:999px;background:#ffe2d1;color:var(--accent);font-size:12px;font-weight:950;object-fit:cover;overflow:hidden;box-shadow:0 7px 16px rgba(138,31,17,.12)}
+.artist-country-icon .tourism-icon{width:20px;height:20px}
 .artist-country-filter strong,.artist-country-filter small{display:block;white-space:nowrap}
-.artist-country-filter strong{font-size:13px;font-weight:950}
+.artist-country-filter strong{max-width:100%;overflow:hidden;text-overflow:ellipsis;font-size:13px;font-weight:950}
 .artist-country-filter small{margin-top:2px;color:var(--muted);font-size:11px;font-weight:850}
 .timeline-controls{display:flex;align-items:center;gap:8px}
 .timeline-btn{display:grid;place-items:center;width:38px;height:38px;border:1px solid #ffc3a5;border-radius:999px;background:#fff7f2;color:#8a1f11;cursor:pointer;box-shadow:0 10px 24px rgba(255,106,0,.09)}
@@ -325,6 +338,16 @@ mark{display:inline;padding:.08em .34em;border-radius:6px;background:linear-grad
 .lyrics a,.lyrics a *{text-decoration:none!important}
 .lyrics a{display:inline;color:var(--accent)!important;font-weight:900;text-decoration:none!important;text-underline-offset:0;border-radius:5px;background:linear-gradient(180deg,transparent 55%,rgba(255,106,0,.14) 55%);box-shadow:none!important;transition:color .15s ease,background .15s ease}
 .lyrics a:hover,.lyrics a:focus-visible{color:var(--accent-2)!important;background:linear-gradient(180deg,transparent 40%,rgba(225,29,29,.14) 40%);box-shadow:none!important;text-decoration:none!important}
+.song-lyrics-shell{position:relative;margin-top:24px;padding-bottom:76px;overflow:hidden}
+.song-lyrics-content{--lyrics-collapsed-height:260px;position:relative;overflow:hidden;transition:max-height .28s ease}
+.song-lyrics-shell.is-collapsed .song-lyrics-content{max-height:var(--lyrics-collapsed-height)}
+.song-lyrics-shell.is-expanded .song-lyrics-content,.song-lyrics-shell.is-short .song-lyrics-content{max-height:none;overflow:visible}
+.song-lyrics-shell.is-short{padding-bottom:22px}
+.song-lyrics-shell.is-collapsed .song-lyrics-content::after{position:absolute;left:0;right:0;bottom:0;height:112px;content:"";background:linear-gradient(180deg,rgba(255,255,255,0),#fff 72%);pointer-events:none}
+.song-lyrics-toggle{position:absolute;left:22px;right:22px;bottom:18px;display:inline-flex;align-items:center;justify-content:center;gap:8px;min-height:42px;padding:0 16px;border:0;border-radius:8px;background:transparent;color:#8a1f11;font:inherit;font-weight:950;cursor:pointer}
+.song-lyrics-toggle:hover,.song-lyrics-toggle:focus-visible{color:var(--accent-2);outline:0;transform:translateY(-1px)}
+.song-lyrics-toggle i{font-size:13px;transition:transform .2s ease}
+.song-lyrics-shell.is-expanded .song-lyrics-toggle i{transform:rotate(180deg)}
 .empty{padding:32px;border:1px dashed #ffb088;border-radius:8px;background:#fff;color:var(--muted);text-align:center}
 .payment-box{margin-top:18px;padding:16px;border:1px solid #ffb088;border-radius:8px;background:#fff0e6;color:#8a1f11}
 .site-footer{display:grid;grid-template-columns:minmax(0,.9fr) minmax(0,1.25fr);gap:34px;align-items:start;margin-top:36px;padding:34px clamp(16px,4vw,56px) 118px;border-top:1px solid rgba(255,216,191,.18);color:#ffd7c4;background:linear-gradient(135deg,#100b09 0%,#1c0c08 54%,#351109 100%);box-shadow:inset 0 1px 0 rgba(255,255,255,.04)}
@@ -382,6 +405,7 @@ mark{display:inline;padding:.08em .34em;border-radius:6px;background:linear-grad
 .content-page__body{margin-top:22px;padding:22px;border:1px solid var(--line);border-radius:8px;background:#fff;line-height:1.75;box-shadow:0 12px 28px rgba(74,27,12,.07)}
 .content-page__body img{max-width:100%;height:auto}
 .content-page__body a{color:var(--accent-2);text-decoration:underline}
+@media (max-width:640px){.artist-country-slider{grid-template-columns:38px minmax(0,1fr) 38px;gap:6px}.artist-country-nav{width:38px;min-height:58px}.artist-country-slider::before{left:44px}.artist-country-slider::after{right:44px}.artist-country-filter a{flex-basis:168px;grid-template-columns:34px minmax(104px,1fr);min-height:54px}.artist-country-filter img,.artist-country-icon{width:34px;height:34px}}
 @media (max-width:980px){.site-header{grid-template-columns:minmax(0,1fr) auto;gap:12px;padding:12px 14px}.brand{min-width:0}.brand span:last-child{min-width:0}.brand strong,.brand small{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.site-header nav{display:contents}.header-tools{grid-column:2;grid-row:1;justify-content:flex-end}.header-links{grid-column:1/-1;grid-row:3;justify-content:flex-start}.header-search{grid-column:1/-1;grid-row:2;width:100%}.music-language-select{width:166px;max-width:42vw}.site-header .select2-container{width:166px!important;max-width:42vw}.site-header .select2-container--default .select2-selection--single .select2-selection__rendered{padding-left:8px;padding-right:26px}.music-language-option{max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.music-language-option img{flex:0 0 auto}}
 @media (max-width:820px){.hero,.detail,.content-page,.tourism-hero,.tourism-layout,.tourism-result-grid{grid-template-columns:1fr}.hero{padding-top:32px}.hero-slider{min-height:0}.hero-stats{grid-template-columns:1fr}.section-head{align-items:flex-start;flex-direction:column}.detail{padding-top:24px}.tourism-hero{align-items:start;padding-top:32px}.tourism-stats{width:100%;min-width:0}.tourism-layout{padding:18px 14px 8px}.tourism-map{height:390px}.tourism-country-list{max-height:none}.site-footer{grid-template-columns:1fr;gap:18px;padding:26px 14px 118px}.footer-brand{align-items:flex-start;width:100%}.footer-menu,.footer-menu.has-sites{grid-template-columns:repeat(2,minmax(0,1fr));gap:20px}.footer-sites{grid-column:1/-1}.footer-site-link strong,.footer-site-link small{white-space:normal}}
 @media (max-width:520px){.brand-mark{width:38px;height:38px;font-size:22px}.brand{gap:10px}.music-language-select{width:122px;max-width:36vw}.site-header .select2-container{width:122px!important;max-width:36vw}.music-login-button{min-height:38px;padding:0 10px;font-size:0}.music-login-button i{font-size:15px}.music-profile-button{width:38px;height:38px}.header-tools{gap:6px}.header-links{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:6px}.site-header nav a{display:flex;align-items:center;justify-content:center;min-height:38px;padding:8px 5px;font-size:12px;text-align:center}.tourism-stats{grid-template-columns:1fr}.tourism-map-head{align-items:flex-start;flex-direction:column}.tourism-map{height:310px}.tourism-selected-country{width:100%}.footer-brand{gap:12px;padding:14px}.footer-brand img{width:52px;height:52px}.footer-menu,.footer-menu.has-sites{grid-template-columns:1fr;gap:18px}.footer-sites{grid-column:auto}.footer-column a{overflow-wrap:anywhere}.footer-site-link{grid-template-columns:24px minmax(0,1fr)}}
