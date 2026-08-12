@@ -18,7 +18,7 @@ if (!$song || empty($song['mp3'])) {
 $price = music_song_price($song, $paypalConfig);
 if ($price <= 0) {
     $_SESSION['paid_music_songs'][$songId] = true;
-    header('Location: ' . music_song_url($songId));
+    header('Location: ' . music_song_url($songId, (string) ($song['lang'] ?? '')));
     exit;
 }
 
@@ -50,7 +50,7 @@ if ($tokenStatus >= 300 || empty($tokenData['access_token'])) {
 }
 
 $returnUrl = music_absolute_url('paypal-return.php?id=' . rawurlencode($songId));
-$cancelUrl = rtrim(music_site_origin(), '/') . music_song_url($songId);
+$cancelUrl = rtrim(music_site_origin(), '/') . music_song_url($songId, (string) ($song['lang'] ?? ''));
 
 $payload = [
     'intent' => 'CAPTURE',

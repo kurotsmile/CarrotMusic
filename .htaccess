@@ -30,6 +30,7 @@ RewriteRule ^genre/([^/]+)/?$ genre.php?slug=$1 [QSA,L,B]
 RewriteRule ^year/([0-9]{4})/?$ song_year.php?year=$1 [QSA,L]
 RewriteRule ^country/([A-Za-z]{2})/?$ music_tourism.php?country=$1 [QSA,L]
 RewriteRule ^page/([^/]+)/?$ index.php?page=$1 [QSA,L,B]
+RewriteRule ^songs/([A-Za-z0-9_-]+)/([^/]+)/?$ song.php?lang=$1&id=$2 [QSA,L]
 
 RewriteCond %{REQUEST_FILENAME} !-f
 RewriteCond %{REQUEST_FILENAME} !-d

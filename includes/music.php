@@ -256,7 +256,7 @@ function music_redirect_to_canonical(string $canonicalUrl, array $removeQueryKey
     exit;
 }
 
-function music_song_url(string $id): string
+function music_song_url(string $id, string $lang = ''): string
 {
     return music_url(music_slug($id));
 }
@@ -760,6 +760,7 @@ function music_render_header(string $title, string $description = '', string $im
     <script src="https://unpkg.com/tippy.js@6"></script>
     <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css">
+    <meta name="google-adsense-account" content="ca-pub-5388516931803092">
 </head>
 <body>
 <header class="site-header">
@@ -767,13 +768,17 @@ function music_render_header(string $title, string $description = '', string $im
         <span class="brand-mark">♪</span>
         <span><strong><?= music_h(music_brand_name()) ?></strong><small><?= music_h(music_label('music.brand_tagline', 'Listen to music every day')) ?></small></span>
     </a>
-    <form class="header-search" method="get" action="<?= music_h(music_home_url()) ?>">
-        <input name="q" type="search" value="<?= music_h($searchQuery) ?>" placeholder="<?= music_h(music_label('music.search_placeholder', 'Tìm bài hát hoặc nghệ sĩ')) ?>">
-        <button type="submit" aria-label="<?= music_h(music_label('action.search', 'Search')) ?>"><i class="fas fa-search"></i></button>
-    </form>
+    <div class="header-search-row">
+        <form class="header-search" method="get" action="<?= music_h(music_home_url()) ?>">
+            <input name="q" type="search" value="<?= music_h($searchQuery) ?>" placeholder="<?= music_h(music_label('music.search_placeholder', 'Tìm bài hát hoặc nghệ sĩ')) ?>">
+            <button type="submit" aria-label="<?= music_h(music_label('search', 'Search')) ?>"><i class="fas fa-search"></i></button>
+        </form>
+        <button class="header-menu-toggle" type="button" aria-expanded="false" aria-controls="music-header-links" aria-label="<?= music_h(music_label('aria.toggle_menu', 'Mở menu')) ?>">
+            <i class="fas fa-bars" aria-hidden="true"></i>
+        </button>
+    </div>
     <nav>
-        <span class="header-links">
-            <a class="site-link" href="<?= music_h(music_home_url()) ?>"><?= music_h(music_label('nav.explore', 'Explore')) ?></a>
+        <span class="header-links" id="music-header-links">
             <a class="site-link" href="<?= music_h(music_home_url('genres')) ?>"><?= music_h(music_label('music.label.genres', 'Genres')) ?></a>
             <a class="site-link" href="<?= music_h(music_home_url('artists')) ?>"><?= music_h(music_label('music.label.artists', 'Artists')) ?></a>
             <a class="site-link" href="<?= music_h(music_countries_url()) ?>"><?= music_h(music_label('music.label.tourism', 'Du lịch')) ?></a>
@@ -785,8 +790,12 @@ function music_render_header(string $title, string $description = '', string $im
                         <?php foreach ($languageOptions as $language): ?>
                             <?php $languageKey = (string) ($language['lang_key'] ?? ''); ?>
                             <?php if ($languageKey === '') continue; ?>
-                            <option value="<?= music_h($languageKey) ?>" data-icon="<?= music_h($language['icon'] ?? '') ?>" <?= $languageKey === $lang ? 'selected' : '' ?>>
-                                <?= music_h(($language['name'] ?? $languageKey) . ' · ' . strtoupper($languageKey)) ?>
+                            <?php
+                            $languageName = trim((string) ($language['name'] ?? '')) ?: strtoupper($languageKey);
+                            $languageSearch = trim($languageName . ' ' . strtoupper($languageKey) . ' ' . (string) ($language['lang_country'] ?? ''));
+                            ?>
+                            <option value="<?= music_h($languageKey) ?>" data-icon="<?= music_h($language['icon'] ?? '') ?>" data-search="<?= music_h($languageSearch) ?>" <?= $languageKey === $lang ? 'selected' : '' ?>>
+                                <?= music_h($languageName) ?>
                             </option>
                         <?php endforeach; ?>
                     </select>
@@ -799,7 +808,7 @@ function music_render_header(string $title, string $description = '', string $im
                     $musicUserAvatar = trim((string) ($musicUser['avatar'] ?? ''));
                     $musicUserInitial = strtoupper(substr($musicUserName, 0, 1) ?: 'U');
                     ?>
-                    <a class="music-profile-button" href="<?= music_h(music_url('profile.php')) ?>" aria-label="<?= music_h(music_label('nav.profile', 'Profile')) ?>">
+                    <a class="music-profile-button js-music-profile-popover" href="<?= music_h(music_url('profile.php')) ?>" aria-label="<?= music_h(music_label('nav.profile', 'Profile')) ?>">
                         <?php if ($musicUserAvatar !== ''): ?>
                             <img src="<?= music_h($musicUserAvatar) ?>" alt="">
                         <?php else: ?>
@@ -809,7 +818,6 @@ function music_render_header(string $title, string $description = '', string $im
                 <?php else: ?>
                     <button class="music-login-button js-music-login" type="button" aria-label="<?= music_h(music_label('nav.login', 'Login')) ?>">
                         <i class="fas fa-user-circle" aria-hidden="true"></i>
-                        <?= music_h(music_label('nav.login', 'Login')) ?>
                     </button>
                 <?php endif; ?>
             </span>
@@ -823,6 +831,8 @@ function music_render_header(string $title, string $description = '', string $im
 function music_render_footer(): void
 {
     $footerSites = music_footer_sites($GLOBALS['pdo'] ?? null);
+    $playerVersion = is_file(__DIR__ . '/../cr_player/cr_player.js') ? (string) filemtime(__DIR__ . '/../cr_player/cr_player.js') : '1';
+    $musicLoggedIn = !empty($_SESSION['home_user_id']);
     $footerColumns = [
         music_label('footer.company', 'Organization') => [
             'about' => ['footer.about', 'About'],
@@ -892,13 +902,16 @@ function music_render_footer(): void
         <?php endif; ?>
     </nav>
 </footer>
-<script src="<?= music_h(music_url('cr_player/cr_player.js')) ?>"></script>
+<script src="<?= music_h(music_url('cr_player/cr_player.js?v=' . $playerVersion)) ?>"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 <script>
 cr_player.path = '<?= music_h(music_url('cr_player')) ?>';
-cr_player.onCreate('theme_basic_bottom');
+cr_player.song_base = <?= json_encode(music_url(''), JSON_UNESCAPED_SLASHES) ?>;
+cr_player.onCreate('theme_heart_beat_play');
 
 const musicEmailLoginEndpoint = <?= json_encode(music_url('login-email.php'), JSON_UNESCAPED_SLASHES) ?>;
+const musicPlaylistEndpoint = <?= json_encode(music_url('playlist.php'), JSON_UNESCAPED_SLASHES) ?>;
+const musicIsLoggedIn = <?= $musicLoggedIn ? 'true' : 'false' ?>;
 const musicOauthError = new URLSearchParams(window.location.search).get('oauth_error');
 if (musicOauthError) {
     Swal.fire({
@@ -938,11 +951,269 @@ const musicCopyText = async (text) => {
     field.remove();
 };
 
+const musicEscapeHtml = (value) => String(value ?? '').replace(/[&<>"']/g, (char) => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;'}[char]));
+
+const musicPlaylistRequest = async (body = null) => {
+    const options = {headers: {'X-Requested-With': 'XMLHttpRequest'}};
+    if (body) {
+        options.method = 'POST';
+        options.body = body;
+    }
+    const response = await fetch(body ? musicPlaylistEndpoint : `${musicPlaylistEndpoint}?action=list`, options);
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok || !payload.ok) {
+        throw new Error(payload.message || <?= json_encode(music_label('playlist.error_action', 'Tác vụ playlist không hợp lệ.'), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>);
+    }
+    return payload;
+};
+
+const musicSongFromPlaylistButton = (button) => ({
+    id: button.getAttribute('cr-id') || '',
+    name: button.getAttribute('cr-name') || '',
+    artist: button.getAttribute('cr-artist') || '',
+    mp3: button.getAttribute('cr-url') || '',
+    avatar: button.getAttribute('cr-avatar') || '',
+});
+
+const musicPlaylistSongObjects = (songs = []) => songs
+    .filter((item) => item && item.mp3)
+    .map((item) => ({
+        id: item.id || '',
+        name: item.name || 'Song',
+        artist: item.artist || 'Heart Beat Play',
+        mp3: item.mp3,
+        avatar: item.avatar || cr_player.path + '/song.png',
+    }));
+
+const musicRenderPlaylistManagerItem = (playlist) => {
+    const songs = playlist.songs || [];
+    return `
+        <article class="music-playlist-manager-item" data-playlist-id="${playlist.id}">
+            <span class="music-playlist-manager-icon"><i class="fas fa-list-ul"></i></span>
+            <span class="music-playlist-manager-copy">
+                <strong>${musicEscapeHtml(playlist.name)}</strong>
+                <small>${songs.length} <?= music_h(music_label('music.label.songs', 'bài hát')) ?></small>
+            </span>
+            <button type="button" data-playlist-play="${playlist.id}" title="<?= music_h(music_label('music.action.play', 'Phát')) ?>" aria-label="<?= music_h(music_label('music.action.play', 'Phát')) ?>"><i class="fas fa-play"></i></button>
+            <button type="button" data-playlist-pick="${playlist.id}" title="<?= music_h(music_label('playlist.save_song', 'Lưu bài hát')) ?>" aria-label="<?= music_h(music_label('playlist.save_song', 'Lưu bài hát')) ?>"><i class="fas fa-check"></i></button>
+            <button type="button" data-playlist-delete="${playlist.id}" title="<?= music_h(music_label('action.delete', 'Delete')) ?>" aria-label="<?= music_h(music_label('action.delete', 'Delete')) ?>"><i class="fas fa-trash"></i></button>
+        </article>
+    `;
+};
+
+const musicRenderProfilePopover = (playlists = [], isLoading = false, errorMessage = '') => `
+    <div class="music-profile-popover">
+        <div class="music-profile-popover-actions">
+            <a href="<?= music_h(music_url('profile.php?mode=edit')) ?>"><i class="fas fa-user-edit"></i><span>Edit info</span></a>
+            <a href="<?= music_h(music_url('profile.php?mode=playlist')) ?>" title="Manager Playlist"><i class="fas fa-list-ul"></i><span>Playlists</span></a>
+            <a href="<?= music_h(music_url('profile.php?logout=1')) ?>"><i class="fas fa-sign-out-alt"></i><span>Logout</span></a>
+        </div>
+        <div class="music-profile-popover-head">
+            <span><?= music_h(music_label('profile.tab_playlist', 'Playlist')) ?></span>
+            <small>${playlists.length} <?= music_h(music_label('music.label.songs', 'playlist')) ?></small>
+        </div>
+        <div class="music-profile-popover-list">
+            ${isLoading ? `<div class="music-playlist-manager-empty"><?= music_h(music_label('playlist.popup_loading', 'Đang tải playlist')) ?></div>` : ''}
+            ${errorMessage ? `<div class="music-playlist-manager-empty">${musicEscapeHtml(errorMessage)}</div>` : ''}
+            ${!isLoading && !errorMessage && playlists.length ? playlists.map((playlist) => `
+                <article class="music-playlist-manager-item music-playlist-manager-item--profile" data-profile-playlist-id="${playlist.id}">
+                    <span class="music-playlist-manager-icon"><i class="fas fa-list-ul"></i></span>
+                    <span class="music-playlist-manager-copy">
+                        <strong>${musicEscapeHtml(playlist.name)}</strong>
+                        <small>${(playlist.songs || []).length} <?= music_h(music_label('music.label.songs', 'bài hát')) ?></small>
+                    </span>
+                    <button type="button" data-profile-playlist-play="${playlist.id}" title="<?= music_h(music_label('music.action.play', 'Phát')) ?>"><i class="fas fa-play"></i></button>
+                    <a href="<?= music_h(music_url('profile.php?mode=playlist&playlist_id=')) ?>${playlist.id}" title="<?= music_h(music_label('profile.tab_playlist', 'Playlist')) ?>"><i class="fas fa-pen"></i></a>
+                </article>
+            `).join('') : ''}
+            ${!isLoading && !errorMessage && !playlists.length ? `<div class="music-playlist-manager-empty"><?= music_h(music_label('playlist.no_playlist', 'Bạn chưa có playlist nào.')) ?></div>` : ''}
+        </div>
+    </div>
+`;
+
+const musicOpenPlaylistPopup = async (button) => {
+    const song = musicSongFromPlaylistButton(button);
+    if (!song.mp3 || !song.name) {
+        cr_player.add_emp(button);
+        return;
+    }
+
+    Swal.fire({
+        title: <?= json_encode(music_label('playlist.popup_loading', 'Đang tải playlist'), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>,
+        allowOutsideClick: false,
+        didOpen: () => Swal.showLoading(),
+    });
+
+    try {
+        const payload = await musicPlaylistRequest();
+        let playlists = payload.playlists || [];
+        const renderList = () => {
+            const list = Swal.getPopup()?.querySelector('[data-playlist-list]');
+            if (!list) return;
+            list.innerHTML = playlists.length
+                ? playlists.map(musicRenderPlaylistManagerItem).join('')
+                : `<div class="music-playlist-manager-empty"><?= music_h(music_label('playlist.no_playlist', 'Bạn chưa có playlist nào.')) ?></div>`;
+        };
+        const saveSongToPlaylist = async (playlistId) => {
+            const data = new FormData();
+            data.append('action', 'add_song');
+            data.append('playlist_id', playlistId);
+            data.append('song_id', song.id);
+            data.append('name', song.name);
+            data.append('artist', song.artist);
+            data.append('mp3', song.mp3);
+            data.append('avatar', song.avatar);
+            return await musicPlaylistRequest(data);
+        };
+        await Swal.fire({
+            title: <?= json_encode(music_label('playlist.popup_title', 'Lưu vào Playlist'), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>,
+            html: `
+                <div class="music-playlist-popup">
+                    <div class="music-playlist-song">
+                        <img src="${musicEscapeHtml(song.avatar || cr_player.path + '/song.png')}" alt="">
+                        <span><strong>${musicEscapeHtml(song.name)}</strong><small>${musicEscapeHtml(song.artist)}</small></span>
+                    </div>
+                    <div class="music-playlist-manager">
+                        <div class="music-playlist-manager-head">
+                            <span><?= music_h(music_label('playlist.choose', 'Chọn playlist')) ?></span>
+                            <small><?= music_h(music_label('playlist.manager_hint', 'Phát, chọn hoặc xóa playlist')) ?></small>
+                        </div>
+                        <div class="music-playlist-manager-list" data-playlist-list></div>
+                    </div>
+                    <div class="music-playlist-create">
+                        <label>
+                            <span><?= music_h(music_label('playlist.new_name', 'Playlist mới')) ?></span>
+                            <input data-playlist-name maxlength="255" placeholder="<?= music_h(music_label('playlist.name_placeholder', 'Ví dụ: Nhạc chạy bộ')) ?>">
+                        </label>
+                        <button class="btn btn-primary" type="button" data-playlist-create><i class="fas fa-plus"></i><?= music_h(music_label('action.create', 'Tạo')) ?></button>
+                    </div>
+                    <div class="music-login-message" data-playlist-message aria-live="polite"></div>
+                </div>
+            `,
+            showCancelButton: true,
+            showConfirmButton: false,
+            cancelButtonText: <?= json_encode(music_label('action.cancel', 'Hủy'), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>,
+            confirmButtonColor: '#ff6a00',
+            customClass: {popup: 'music-playlist-swal'},
+            didOpen: () => {
+                const popup = Swal.getPopup();
+                const createButton = popup?.querySelector('[data-playlist-create]');
+                const nameInput = popup?.querySelector('[data-playlist-name]');
+                const message = popup?.querySelector('[data-playlist-message]');
+                renderList();
+                popup?.querySelector('[data-playlist-list]')?.addEventListener('click', async (event) => {
+                    const playButton = event.target.closest('[data-playlist-play]');
+                    const pickButton = event.target.closest('[data-playlist-pick]');
+                    const deleteButton = event.target.closest('[data-playlist-delete]');
+                    const playlistId = playButton?.dataset.playlistPlay || pickButton?.dataset.playlistPick || deleteButton?.dataset.playlistDelete || '';
+                    const playlist = playlists.find((item) => String(item.id) === String(playlistId));
+                    if (!playlist) return;
+
+                    if (playButton) {
+                        const songs = musicPlaylistSongObjects(playlist.songs || []);
+                        if (!songs.length) return;
+                        cr_player.list_song = songs;
+                        cr_player.index_play_cur = 0;
+                        cr_player.play_by_index(0);
+                        return;
+                    }
+
+                    if (pickButton) {
+                        pickButton.disabled = true;
+                        try {
+                            const result = await saveSongToPlaylist(playlistId);
+                            if (message) {
+                                message.className = 'music-login-message is-success';
+                                message.textContent = result.message || <?= json_encode(music_label('playlist.song_saved', 'Đã lưu bài hát vào playlist.'), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>;
+                            }
+                            const refreshed = await musicPlaylistRequest();
+                            playlists = refreshed.playlists || playlists;
+                            renderList();
+                        } catch (error) {
+                            if (message) {
+                                message.className = 'music-login-message is-error';
+                                message.textContent = error.message;
+                            }
+                        } finally {
+                            pickButton.disabled = false;
+                        }
+                        return;
+                    }
+
+                    if (deleteButton) {
+                        if (!window.confirm(<?= json_encode(music_label('playlist.confirm_delete', 'Xóa playlist này?'), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>)) return;
+                        deleteButton.disabled = true;
+                        try {
+                            const data = new FormData();
+                            data.append('action', 'delete');
+                            data.append('playlist_id', playlistId);
+                            await musicPlaylistRequest(data);
+                            playlists = playlists.filter((item) => String(item.id) !== String(playlistId));
+                            renderList();
+                        } catch (error) {
+                            if (message) {
+                                message.className = 'music-login-message is-error';
+                                message.textContent = error.message;
+                            }
+                        }
+                    }
+                });
+                createButton?.addEventListener('click', async () => {
+                    const name = nameInput?.value.trim() || '';
+                    if (!name) {
+                        if (message) {
+                            message.className = 'music-login-message is-error';
+                            message.textContent = <?= json_encode(music_label('playlist.error_name', 'Vui lòng nhập tên playlist.'), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>;
+                        }
+                        return;
+                    }
+                    createButton.disabled = true;
+                    try {
+                        const data = new FormData();
+                        data.append('action', 'create');
+                        data.append('name', name);
+                        const created = await musicPlaylistRequest(data);
+                        playlists = [created.playlist, ...playlists];
+                        renderList();
+                        if (message) {
+                            message.className = 'music-login-message is-success';
+                            message.textContent = <?= json_encode(music_label('playlist.created', 'Đã tạo playlist.'), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>;
+                        }
+                        if (nameInput) nameInput.value = '';
+                    } catch (error) {
+                        if (message) {
+                            message.className = 'music-login-message is-error';
+                            message.textContent = error.message;
+                        }
+                    } finally {
+                        createButton.disabled = false;
+                    }
+                });
+            },
+        });
+    } catch (error) {
+        Swal.fire({
+            icon: 'error',
+            title: <?= json_encode(music_label('playlist.error_title', 'Không thể mở playlist'), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>,
+            text: error.message,
+            confirmButtonColor: '#ff6a00',
+        });
+    }
+};
+
+document.addEventListener('click', (event) => {
+    const playlistButton = event.target.closest('[onclick*="cr_player.add_emp"]');
+    if (!playlistButton || !musicIsLoggedIn) return;
+    event.preventDefault();
+    event.stopPropagation();
+    event.stopImmediatePropagation();
+    musicOpenPlaylistPopup(playlistButton);
+}, true);
+
 document.addEventListener('click', async (event) => {
     const loginButton = event.target.closest('.js-music-login');
     if (loginButton) {
         Swal.fire({
-            title: <?= json_encode(music_label('login.title', 'Login'), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>,
             html: `
                 <div class="music-login-popup">
                     <div class="music-login-brand">
@@ -1111,6 +1382,57 @@ const musicLanguageTemplate = (item) => {
     return label;
 };
 
+const musicLanguageMatcher = (params, data) => {
+    const term = (params.term || '').trim().toLowerCase();
+    if (term === '') {
+        return data;
+    }
+
+    const option = data.element || null;
+    const haystack = [
+        data.text || '',
+        data.id || '',
+        option ? option.dataset.search || '' : ''
+    ].join(' ').toLowerCase();
+
+    return haystack.includes(term) ? data : null;
+};
+
+const musicHeader = document.querySelector('.site-header');
+const musicHeaderMenuToggle = document.querySelector('.header-menu-toggle');
+if (musicHeader && musicHeaderMenuToggle) {
+    const setMusicHeaderMenu = (isOpen) => {
+        musicHeader.classList.toggle('is-menu-open', isOpen);
+        musicHeaderMenuToggle.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
+        const icon = musicHeaderMenuToggle.querySelector('i');
+        if (icon) {
+            icon.classList.toggle('fa-bars', !isOpen);
+            icon.classList.toggle('fa-times', isOpen);
+        }
+    };
+
+    musicHeaderMenuToggle.addEventListener('click', () => {
+        setMusicHeaderMenu(!musicHeader.classList.contains('is-menu-open'));
+    });
+
+    musicHeader.querySelectorAll('.header-links a').forEach((link) => {
+        link.addEventListener('click', () => setMusicHeaderMenu(false));
+    });
+
+    document.addEventListener('click', (event) => {
+        if (!musicHeader.classList.contains('is-menu-open') || musicHeader.contains(event.target)) {
+            return;
+        }
+        setMusicHeaderMenu(false);
+    });
+
+    window.addEventListener('resize', () => {
+        if (window.innerWidth > 980) {
+            setMusicHeaderMenu(false);
+        }
+    });
+}
+
 if (window.jQuery && jQuery.fn.select2) {
     jQuery('.music-language-select').select2({
         width: 'style',
@@ -1118,6 +1440,7 @@ if (window.jQuery && jQuery.fn.select2) {
         minimumResultsForSearch: 8,
         templateResult: musicLanguageTemplate,
         templateSelection: musicLanguageTemplate,
+        matcher: musicLanguageMatcher,
         escapeMarkup: (markup) => markup,
     }).on('change', function () {
         const url = new URL(window.location.href);
@@ -1135,11 +1458,62 @@ if (window.jQuery && jQuery.fn.select2) {
 }
 
 if (window.tippy) {
+    const profileButton = document.querySelector('.js-music-profile-popover');
+    if (profileButton && musicIsLoggedIn) {
+        let profilePlaylists = [];
+        let profileLoaded = false;
+        const profilePopover = tippy(profileButton, {
+            content: musicRenderProfilePopover([], true),
+            allowHTML: true,
+            interactive: true,
+            trigger: 'mouseenter focus click',
+            placement: 'bottom-end',
+            theme: 'music-profile',
+            maxWidth: 'none',
+            delay: [80, 120],
+            appendTo: document.body,
+            onShow(instance) {
+                if (profileLoaded) {
+                    instance.setContent(musicRenderProfilePopover(profilePlaylists));
+                    return;
+                }
+                instance.setContent(musicRenderProfilePopover([], true));
+                musicPlaylistRequest()
+                    .then((payload) => {
+                        profilePlaylists = payload.playlists || [];
+                        profileLoaded = true;
+                        instance.setContent(musicRenderProfilePopover(profilePlaylists));
+                    })
+                    .catch((error) => {
+                        instance.setContent(musicRenderProfilePopover([], false, error.message));
+                    });
+            },
+            onMount(instance) {
+                instance.popper.addEventListener('click', async (event) => {
+                    const playButton = event.target.closest('[data-profile-playlist-play]');
+                    const playlistId = playButton?.dataset.profilePlaylistPlay || '';
+                    if (!playlistId) return;
+                    const playlist = profilePlaylists.find((item) => String(item.id) === String(playlistId));
+                    if (!playlist) return;
+
+                    if (playButton) {
+                        const songs = musicPlaylistSongObjects(playlist.songs || []);
+                        if (!songs.length) return;
+                        cr_player.list_song = songs;
+                        cr_player.index_play_cur = 0;
+                        cr_player.play_by_index(0);
+                        return;
+                    }
+
+                });
+            },
+        });
+    }
     document.querySelectorAll('.icon-btn[title]').forEach((item) => {
         item.dataset.tooltipLabel = item.getAttribute('title') || '';
         item.removeAttribute('title');
     });
-    tippy('button[aria-label], a[aria-label], .icon-btn[data-tooltip-label]', {
+    tippy('button[aria-label], a[aria-label]:not(.js-music-profile-popover), .icon-btn[data-tooltip-label]', {
         content(reference) {
             return reference.getAttribute('aria-label') || reference.dataset.tooltipLabel || reference.getAttribute('title') || '';
         },

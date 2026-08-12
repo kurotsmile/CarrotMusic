@@ -6,18 +6,30 @@ $genreSlug = trim((string) ($_GET['slug'] ?? ''));
 $genre = null;
 $songs = [];
 $currentPage = max(1, (int) ($_GET['page_no'] ?? 1));
+$songScope = strtolower(trim((string) ($_GET['scope'] ?? 'world')));
+if (!in_array($songScope, ['world', 'local'], true)) {
+    $songScope = 'world';
+}
+$localLang = current_lang_key();
 $songsPerPage = 24;
 $totalSongs = 0;
 $totalPages = 1;
 $errorMessage = $db_error ?? '';
+$genreSongListAnchor = 'genre-song-list';
 
-$renderGenrePagination = static function (string $genreId, string $genreTitle, int $currentPage, int $totalPages): string {
+$renderGenrePagination = static function (string $genreId, string $genreTitle, int $currentPage, int $totalPages, string $songScope, string $anchor = ''): string {
     if ($totalPages <= 1) {
         return '';
     }
 
     $items = [];
-    $pageUrl = static fn(int $page): string => music_url_with_query(music_genre_url($genreId, $genreTitle), ['page_no' => $page]);
+    $pageUrl = static function (int $page) use ($genreId, $genreTitle, $songScope, $anchor): string {
+        $url = music_url_with_query(music_genre_url($genreId, $genreTitle), array_filter([
+            'scope' => $songScope === 'local' ? 'local' : '',
+            'page_no' => $page,
+        ]));
+        return $anchor !== '' ? $url . '#' . rawurlencode($anchor) : $url;
+    };
     $items[] = '<a class="pagination-link' . ($currentPage <= 1 ? ' is-disabled' : '') . '" href="' . music_h($pageUrl(max(1, $currentPage - 1))) . '" aria-label="' . music_h(music_label('aria.previous_page', 'Previous page')) . '">&lsaquo;</a>';
 
     $start = max(1, $currentPage - 2);
@@ -51,6 +63,8 @@ if ($pdo instanceof PDO && ($genreId !== '' || $genreSlug !== '')) {
         }
         $cacheKey = music_cache_key('music_genre_detail', [
             'id' => $genreId,
+            'scope' => $songScope,
+            'lang' => $songScope === 'local' ? $localLang : '',
             'page' => $currentPage,
             'per_page' => $songsPerPage,
         ]);
@@ -65,7 +79,20 @@ if ($pdo instanceof PDO && ($genreId !== '' || $genreSlug !== '')) {
         } else {
             $genre = $genre ?: music_fetch_genre($pdo, $genreId);
             if ($genre) {
-                $totalSongs = (int) ($genre['song_count'] ?? 0);
+                $whereSql = 'FIND_IN_SET(REPLACE(?, " ", ""), REPLACE(COALESCE(s.genre, ""), " ", "")) > 0';
+                $whereParams = [$genreId];
+                if ($songScope === 'local') {
+                    $whereSql .= ' AND TRIM(COALESCE(s.lang, "")) = ?';
+                    $whereParams[] = $localLang;
+                }
+
+                if ($songScope === 'world') {
+                    $totalSongs = (int) ($genre['song_count'] ?? 0);
+                } else {
+                    $countStmt = $pdo->prepare('SELECT COUNT(DISTINCT s.id) FROM song s WHERE ' . $whereSql);
+                    $countStmt->execute($whereParams);
+                    $totalSongs = (int) $countStmt->fetchColumn();
+                }
                 $totalPages = max(1, (int) ceil($totalSongs / $songsPerPage));
                 $currentPage = min($currentPage, $totalPages);
                 $offset = ($currentPage - 1) * $songsPerPage;
@@ -74,14 +101,17 @@ if ($pdo instanceof PDO && ($genreId !== '' || $genreSlug !== '')) {
                     FROM song s
                     LEFT JOIN song_artist_map sam ON sam.song_id = s.id
                     LEFT JOIN song_artist sa ON sa.id = sam.artist_id
-                    WHERE FIND_IN_SET(REPLACE(?, " ", ""), REPLACE(COALESCE(s.genre, ""), " ", "")) > 0
+                    WHERE ' . $whereSql . '
                     GROUP BY s.id
                     ORDER BY s.created_at DESC, s.id ASC
                     LIMIT ? OFFSET ?
                 ');
-                $stmt->bindValue(1, $genreId, PDO::PARAM_STR);
-                $stmt->bindValue(2, $songsPerPage, PDO::PARAM_INT);
-                $stmt->bindValue(3, $offset, PDO::PARAM_INT);
+                $bindIndex = 1;
+                foreach ($whereParams as $whereParam) {
+                    $stmt->bindValue($bindIndex++, $whereParam, PDO::PARAM_STR);
+                }
+                $stmt->bindValue($bindIndex++, $songsPerPage, PDO::PARAM_INT);
+                $stmt->bindValue($bindIndex, $offset, PDO::PARAM_INT);
                 $stmt->execute();
                 $songs = $stmt->fetchAll();
 
@@ -140,32 +170,41 @@ music_render_header($genreTitle . ' - ' . music_label('music.genre.role', 'Thể
     </div>
 </article>
 
-<section class="section">
+<section id="<?= music_h($genreSongListAnchor) ?>" class="section">
     <div class="section-head">
         <div>
             <h2><?= music_h(sprintf(music_label('music.genre.songs_heading', 'Bài hát thuộc %s'), $genreTitle)) ?></h2>
             <p><?= music_h(music_label('music.genre.songs_intro', 'Khám phá những bài hát cùng màu sắc và lưu lại bản nhạc hợp gu của bạn.')) ?></p>
         </div>
+        <nav class="music-mode-switch music-genre-switch" aria-label="<?= music_h(music_label('aria.music_scope_switch', 'Chọn phạm vi bài hát')) ?>">
+            <a class="<?= $songScope === 'world' ? 'is-active' : '' ?>" href="<?= music_h(music_url_with_query(music_genre_url((string) ($genre['genre_id'] ?? $genreId), $genreTitle), ['scope' => 'world']) . '#' . rawurlencode($genreSongListAnchor)) ?>" aria-label="<?= music_h(music_label('world', 'Thế giới')) ?>" title="<?= music_h(music_label('world', 'Thế giới')) ?>">
+                <i class="fas fa-globe-asia" aria-hidden="true"></i>
+            </a>
+            <a class="<?= $songScope === 'local' ? 'is-active' : '' ?>" href="<?= music_h(music_url_with_query(music_genre_url((string) ($genre['genre_id'] ?? $genreId), $genreTitle), ['scope' => 'local']) . '#' . rawurlencode($genreSongListAnchor)) ?>" aria-label="<?= music_h(music_label('local', 'Địa phương')) ?>" title="<?= music_h(music_label('local', 'Địa phương')) ?>">
+                <i class="fas fa-map-marker-alt" aria-hidden="true"></i>
+            </a>
+        </nav>
     </div>
-    <?= $renderGenrePagination((string) ($genre['genre_id'] ?? $genreId), $genreTitle, $currentPage, $totalPages) ?>
+    <?= $renderGenrePagination((string) ($genre['genre_id'] ?? $genreId), $genreTitle, $currentPage, $totalPages, $songScope, $genreSongListAnchor) ?>
     <div class="grid">
         <?php foreach ($songs as $song): ?>
             <?php $songArtist = $song['artist_names'] ?: $song['artist']; ?>
+            <?php $songUrl = music_song_url((string) $song['id'], (string) ($song['lang'] ?? '')); ?>
             <article class="song-card">
-                <a class="site-link" href="<?= music_h(music_song_url($song['id'])) ?>"><img src="<?= music_h(music_cover($song['avatar'])) ?>" alt="<?= music_h($song['name']) ?>"></a>
+                <a class="site-link" href="<?= music_h($songUrl) ?>"><img src="<?= music_h(music_cover($song['avatar'])) ?>" alt="<?= music_h($song['name']) ?>"></a>
                 <div class="song-card-body">
-                    <a class="song-title site-link" href="<?= music_h(music_song_url($song['id'])) ?>"><?= music_h($song['name']) ?></a>
+                    <a class="song-title site-link" href="<?= music_h($songUrl) ?>"><?= music_h($song['name']) ?></a>
                     <div class="song-meta"><?= music_h($songArtist) ?></div>
                     <div class="song-card-actions">
-                        <button class="btn btn-primary" onclick="cr_player.play_emp(this)" cr-url="<?= music_h($song['mp3']) ?>" cr-name="<?= music_h($song['name']) ?>" cr-artist="<?= music_h($songArtist) ?>" cr-avatar="<?= music_h(music_cover($song['avatar'])) ?>"><?= music_play_icon() ?><?= music_h(music_label('music.action.play', 'Phát')) ?></button>
-                        <button class="icon-btn" title="<?= music_h(music_label('music.action.add_to_playlist', 'Thêm vào playlist')) ?>" onclick="cr_player.add_emp(this)" cr-url="<?= music_h($song['mp3']) ?>" cr-name="<?= music_h($song['name']) ?>" cr-artist="<?= music_h($songArtist) ?>" cr-avatar="<?= music_h(music_cover($song['avatar'])) ?>"><i class="fas fa-plus"></i></button>
+                        <button class="btn btn-primary" onclick="cr_player.play_emp(this)" cr-id="<?= music_h($song['id']) ?>" cr-link="<?= music_h($songUrl) ?>" cr-url="<?= music_h($song['mp3']) ?>" cr-name="<?= music_h($song['name']) ?>" cr-artist="<?= music_h($songArtist) ?>" cr-avatar="<?= music_h(music_cover($song['avatar'])) ?>"><?= music_play_icon() ?><?= music_h(music_label('music.action.play', 'Phát')) ?></button>
+                        <button class="icon-btn" title="<?= music_h(music_label('music.action.add_to_playlist', 'Thêm vào playlist')) ?>" onclick="cr_player.add_emp(this)" cr-id="<?= music_h($song['id']) ?>" cr-link="<?= music_h($songUrl) ?>" cr-url="<?= music_h($song['mp3']) ?>" cr-name="<?= music_h($song['name']) ?>" cr-artist="<?= music_h($songArtist) ?>" cr-avatar="<?= music_h(music_cover($song['avatar'])) ?>"><i class="fas fa-plus"></i></button>
                     </div>
                 </div>
             </article>
         <?php endforeach; ?>
     </div>
     <?php if (!$songs): ?><div class="empty"><?= music_h(music_label('music.genre.no_songs', 'Thể loại này chưa có bài hát.')) ?></div><?php endif; ?>
-    <?= $renderGenrePagination((string) ($genre['genre_id'] ?? $genreId), $genreTitle, $currentPage, $totalPages) ?>
+    <?= $renderGenrePagination((string) ($genre['genre_id'] ?? $genreId), $genreTitle, $currentPage, $totalPages, $songScope, $genreSongListAnchor) ?>
 </section>
 
 <script type="application/ld+json">

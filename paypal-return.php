@@ -19,7 +19,7 @@ if ($orderId === '') {
 } else {
     try {
         $stmt = $pdo->prepare('
-            SELECT o.*, s.name AS song_name, s.artist AS song_artist, s.avatar AS song_avatar, s.mp3 AS song_mp3
+            SELECT o.*, s.name AS song_name, s.artist AS song_artist, s.avatar AS song_avatar, s.mp3 AS song_mp3, s.lang AS song_lang
             FROM song_orders o
             LEFT JOIN song s ON s.id = o.song_id
             WHERE o.paypal_order_id = ? ' . ($songId !== '' ? 'AND o.song_id = ? ' : '') . '
@@ -143,7 +143,7 @@ music_render_header($title, 'Kết quả thanh toán bài hát trên ' . music_b
                 <a class="btn btn-primary" href="<?= music_h($order['song_mp3']) ?>" download>Tải MP3</a>
             <?php endif; ?>
             <?php if (!empty($order['song_id'])): ?>
-                <a class="btn site-link" href="<?= music_h(music_song_url((string) $order['song_id'])) ?>">Quay lại bài hát</a>
+                <a class="btn site-link" href="<?= music_h(music_song_url((string) $order['song_id'], (string) ($order['song_lang'] ?? ''))) ?>">Quay lại bài hát</a>
             <?php endif; ?>
         </div>
     </div>

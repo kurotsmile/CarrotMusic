@@ -13,7 +13,7 @@ if (!$slugCandidates) {
         music_label('music.meta.page_not_found_title', 'Không tìm thấy trang - ' . music_brand_name()),
         music_label('music.meta.page_not_found_description', 'Trang bạn đang tìm hiện không tồn tại hoặc đã được chuyển đi.')
     );
-    echo '<section class="content-page"><div class="empty"><strong>' . music_h(music_label('music.error.page_not_found', 'Không tìm thấy page.')) . '</strong><br>' . music_h(music_label('error.missing_slug', 'Thiếu tham số slug.')) . '</div></section>';
+    echo '<section class="content-page"><div class="empty"><strong>' . music_h(music_label('page_not_found', 'Không tìm thấy page.')) . '</strong><br>' . music_h(music_label('error.missing_slug', 'Thiếu tham số slug.')) . '</div></section>';
     music_render_footer();
     exit;
 }
@@ -32,7 +32,7 @@ if (!$page && !$errorMessage) {
         music_label('music.meta.page_not_found_title', 'Không tìm thấy trang - ' . music_brand_name()),
         music_label('music.meta.page_not_found_description', 'Trang bạn đang tìm hiện không tồn tại hoặc đã được chuyển đi.')
     );
-    echo '<section class="content-page"><div class="empty"><strong>' . music_h(music_label('music.error.page_not_found_colon', 'Không tìm thấy page:')) . '</strong><br>' . music_h($pageSlug) . '</div></section>';
+    echo '<section class="content-page"><div class="empty"><strong>' . music_h(music_label('page_not_found', 'Không tìm thấy page:')) . '</strong><br>' . music_h($pageSlug) . '</div></section>';
     music_render_footer();
     exit;
 }

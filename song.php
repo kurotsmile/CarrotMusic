@@ -9,6 +9,7 @@ $relatedScope = strtolower(trim((string) ($_GET['related_scope'] ?? 'local')));
 if (!in_array($relatedScope, ['local', 'world'], true)) {
     $relatedScope = 'local';
 }
+$relatedSongLimit = 28;
 $songViewCount = 0;
 $paypalConfig = music_paypal_config($pdo ?? null, 'music');
 $errorMessage = $db_error ?? '';
@@ -21,36 +22,65 @@ if ($pdo instanceof PDO && $songId !== '') {
             $songViewCount = music_song_view_count($pdo, (string) $song['id']);
             $songArtists = music_fetch_song_artists($pdo, (string) $song['id']);
             $relatedGenreIds = music_split_genres((string) ($song['genre'] ?? ''));
+            $relatedArtistIds = array_values(array_filter(array_map(static fn(array $artist): int => (int) ($artist['id'] ?? 0), $songArtists)));
+            $relatedArtistName = trim((string) ($song['artist'] ?? ''));
             $relatedConditions = [];
-            $relatedParams = [$songId];
             $songLang = trim((string) ($song['lang'] ?? ''));
             foreach ($relatedGenreIds as $genreId) {
                 $relatedConditions[] = 'FIND_IN_SET(?, REPLACE(COALESCE(s.genre, \'\'), \' \', \'\')) > 0';
-                $relatedParams[] = $genreId;
             }
+            $relatedLookups = [];
             if ($relatedConditions) {
-                $relatedWhere = 's.id <> ? AND (' . implode(' OR ', $relatedConditions) . ')';
-            } else {
-                $relatedWhere = 's.id <> ? AND TRIM(COALESCE(s.artist, \'\')) = ?';
-                $relatedParams[] = (string) ($song['artist'] ?? '');
+                $genreWhere = '(' . implode(' OR ', $relatedConditions) . ')';
+                if ($relatedScope === 'local' && $songLang !== '') {
+                    $relatedLookups[] = [$genreWhere . ' AND TRIM(COALESCE(s.lang, \'\')) = ?', [...$relatedGenreIds, $songLang], 'RAND()'];
+                }
+                $relatedLookups[] = [$genreWhere, $relatedGenreIds, 'RAND()'];
             }
-            if ($relatedScope === 'local' && $songLang !== '') {
-                $relatedWhere .= ' AND TRIM(COALESCE(s.lang, \'\')) = ?';
-                $relatedParams[] = $songLang;
+            if ($relatedArtistIds) {
+                $artistPlaceholders = implode(',', array_fill(0, count($relatedArtistIds), '?'));
+                $artistWhere = 'EXISTS (SELECT 1 FROM song_artist_map target_sam WHERE target_sam.song_id = s.id AND target_sam.artist_id IN (' . $artistPlaceholders . '))';
+                if ($relatedScope === 'local' && $songLang !== '') {
+                    $relatedLookups[] = [$artistWhere . ' AND TRIM(COALESCE(s.lang, \'\')) = ?', [...$relatedArtistIds, $songLang], 'RAND()'];
+                }
+                $relatedLookups[] = [$artistWhere, $relatedArtistIds, 'RAND()'];
+            } elseif ($relatedArtistName !== '') {
+                $artistWhere = 'TRIM(COALESCE(s.artist, \'\')) = ?';
+                if ($relatedScope === 'local' && $songLang !== '') {
+                    $relatedLookups[] = [$artistWhere . ' AND TRIM(COALESCE(s.lang, \'\')) = ?', [$relatedArtistName, $songLang], 'RAND()'];
+                }
+                $relatedLookups[] = [$artistWhere, [$relatedArtistName], 'RAND()'];
             }
-            $relatedSql = '
-                SELECT s.*, GROUP_CONCAT(DISTINCT sa.name ORDER BY sa.name SEPARATOR ", ") AS artist_names
-                FROM song s
-                LEFT JOIN song_artist_map sam ON sam.song_id = s.id
-                LEFT JOIN song_artist sa ON sa.id = sam.artist_id
-                WHERE ' . $relatedWhere . '
-                GROUP BY s.id
-                ORDER BY RAND()
-                LIMIT 16
-            ';
-            $relatedStmt = $pdo->prepare($relatedSql);
-            $relatedStmt->execute($relatedParams);
-            $relatedSongs = $relatedStmt->fetchAll();
+            if ($songLang !== '') {
+                $relatedLookups[] = ['TRIM(COALESCE(s.lang, \'\')) = ?', [$songLang], 's.created_at DESC, s.id ASC'];
+            }
+            $relatedLookups[] = ['1 = 1', [], 's.created_at DESC, s.id ASC'];
+            $relatedSongIds = [(string) $song['id'] => true];
+
+            foreach ($relatedLookups as [$relatedWhere, $relatedParams, $relatedOrder]) {
+                $relatedLimit = $relatedSongLimit - count($relatedSongs);
+                if ($relatedLimit <= 0) {
+                    break;
+                }
+                $excludedSongIds = array_keys($relatedSongIds);
+                $excludePlaceholders = implode(',', array_fill(0, count($excludedSongIds), '?'));
+                $relatedSql = '
+                    SELECT s.*, GROUP_CONCAT(DISTINCT sa.name ORDER BY sa.name SEPARATOR ", ") AS artist_names
+                    FROM song s
+                    LEFT JOIN song_artist_map sam ON sam.song_id = s.id
+                    LEFT JOIN song_artist sa ON sa.id = sam.artist_id
+                    WHERE s.id NOT IN (' . $excludePlaceholders . ') AND ' . $relatedWhere . '
+                    GROUP BY s.id
+                    ORDER BY ' . $relatedOrder . '
+                    LIMIT ' . $relatedLimit . '
+                ';
+                $relatedStmt = $pdo->prepare($relatedSql);
+                $relatedStmt->execute([...$excludedSongIds, ...$relatedParams]);
+                foreach ($relatedStmt->fetchAll() as $relatedRow) {
+                    $relatedSongs[] = $relatedRow;
+                    $relatedSongIds[(string) $relatedRow['id']] = true;
+                }
+            }
         }
     } catch (Throwable $e) {
         $errorMessage = $e->getMessage();
@@ -65,7 +95,7 @@ if (!$song) {
     exit;
 }
 
-music_redirect_to_canonical(music_song_url((string) $song['id']), ['id']);
+music_redirect_to_canonical(music_song_url((string) $song['id'], (string) ($song['lang'] ?? '')), ['id', 'lang']);
 
 $artistName = (string) ($song['artist_names'] ?: $song['artist'] ?: music_label('music.label.brand', music_brand_name()));
 $songGenreTags = music_split_genres((string) ($song['genre'] ?? ''));
@@ -73,6 +103,18 @@ $songAlbum = trim((string) ($song['album'] ?? ''));
 $songYear = trim((string) ($song['year'] ?? ''));
 $songLang = trim((string) ($song['lang'] ?? ''));
 $songYoutubeId = music_youtube_video_id((string) ($song['link_ytb'] ?? ''));
+$lyrics = str_replace(['\\r\\n', '\\n', '\\r'], "\n", (string) ($song['lyrics'] ?? ''));
+$lyricsLines = preg_split('/\R/u', $lyrics) ?: [];
+$lyricsBlankLineCount = 0;
+$lyricsTextLineCount = 0;
+foreach ($lyricsLines as $lyricsLine) {
+    if (trim((string) $lyricsLine) === '') {
+        $lyricsBlankLineCount++;
+    } else {
+        $lyricsTextLineCount++;
+    }
+}
+$lyricsHasLooseSpacing = $lyricsTextLineCount > 0 && $lyricsBlankLineCount >= (int) floor($lyricsTextLineCount * 0.45);
 $songCountryCode = '';
 $songCountryName = '';
 if ($songLang !== '' && $pdo instanceof PDO) {
@@ -99,7 +141,7 @@ $byArtist = $songArtists
 $price = music_song_price($song, $paypalConfig);
 $canDownload = trim((string) ($song['mp3'] ?? '')) !== '' && ($price <= 0 || music_has_paid_song((string) $song['id']));
 $title = (string) $song['name'] . ' - ' . $artistName . ' | ' . music_brand_name();
-$description = music_excerpt($song['lyrics'] ?: (($song['album'] ?? '') . ' ' . ($song['genre'] ?? '')), 155);
+$description = music_excerpt($lyrics !== '' ? $lyrics : (($song['album'] ?? '') . ' ' . ($song['genre'] ?? '')), 155);
 music_render_header($title, $description, music_cover($song['avatar']));
 ?>
 <article class="detail">
@@ -147,7 +189,7 @@ music_render_header($title, $description, music_cover($song['avatar']));
         </div>
         <div class="song-actions">
             <?php if (!empty($song['mp3'])): ?>
-                <button class="btn" onclick="cr_player.add_emp(this)" cr-url="<?= music_h($song['mp3']) ?>" cr-name="<?= music_h($song['name']) ?>" cr-artist="<?= music_h($artistName) ?>" cr-avatar="<?= music_h(music_cover($song['avatar'])) ?>"><?= music_h(music_label('music.action.add_to_playlist', 'Thêm playlist')) ?></button>
+                <button class="btn btn-primary" onclick="cr_player.add_emp(this)" cr-id="<?= music_h($song['id']) ?>" cr-link="<?= music_h(music_song_url((string) $song['id'], $songLang)) ?>" cr-url="<?= music_h($song['mp3']) ?>" cr-name="<?= music_h($song['name']) ?>" cr-artist="<?= music_h($artistName) ?>" cr-avatar="<?= music_h(music_cover($song['avatar'])) ?>"><i class="fas fa-plus"></i><?= music_h(music_label('music.action.add_to_playlist', 'Thêm vào danh sách phát')) ?></button>
             <?php endif; ?>
             <?php if ($canDownload): ?>
                 <a class="btn" href="<?= music_h($song['mp3']) ?>" download><?= music_h(music_label('music.action.download_mp3', 'Tải MP3')) ?></a>
@@ -160,18 +202,22 @@ music_render_header($title, $description, music_cover($song['avatar']));
                     YouTube
                 </a>
             <?php endif; ?>
-            <?= music_detail_action_buttons((string) $song['name'], music_song_url((string) $song['id'])) ?>
+            <?= music_detail_action_buttons((string) $song['name'], music_song_url((string) $song['id'], $songLang)) ?>
         </div>
         <?php if (!empty($song['mp3'])): ?>
             <div class="wave-box is-loading" id="song_wave_box">
-                <button class="wave-play" type="button" aria-label="<?= music_h(music_label('music.action.play', 'Phát bài hát')) ?>">
+                <button class="wave-play" type="button" aria-label="<?= music_h(music_label('music.action.play', 'Phát bài hát')) ?>" disabled>
                     <?= music_play_icon() ?>
                 </button>
                 <div class="wave-main">
                     <div id="song_waveform" class="song-waveform">
                         <div class="wave-loading" role="status" aria-live="polite">
                             <span class="wave-loading-spinner" aria-hidden="true"></span>
-                            <span><?= music_h(music_label('music.wave.loading', 'Đang tải sóng nhạc')) ?></span>
+                            <span class="wave-loading-copy">
+                                <b data-wave-loading-text><?= music_h(music_label('music.wave.loading', 'Đang tải sóng nhạc')) ?></b>
+                                <small data-wave-loading-percent>0%</small>
+                                <i class="wave-loading-track" aria-hidden="true"><i data-wave-loading-bar></i></i>
+                            </span>
                         </div>
                     </div>
                 </div>
@@ -181,18 +227,26 @@ music_render_header($title, $description, music_cover($song['avatar']));
             <div class="payment-box"><?= music_h(sprintf(music_label('music.song.paypal_disabled', 'Bài hát này có giá %s, nhưng tính năng thanh toán hiện chưa sẵn sàng. Vui lòng quay lại sau.'), number_format($price, 2))) ?></div>
         <?php endif; ?>
 
-        <?php
-        $lyrics = $song['lyrics'] ?? '';
-        ?>
-
         <?php if ($lyrics): ?>
         <div class="lyrics song-lyrics-shell is-collapsed" data-song-lyrics>
             <div class="song-lyrics-content" data-song-lyrics-content>
-            <?=
-                $lyrics !== strip_tags($lyrics)
-                    ? $lyrics
-                    : nl2br(htmlspecialchars($lyrics, ENT_QUOTES, 'UTF-8'));
-            ?>
+            <?php if ($lyrics !== strip_tags($lyrics)): ?>
+                <?= $lyrics ?>
+            <?php else: ?>
+                <?php foreach ($lyricsLines as $lyricLine): ?>
+                    <?php
+                    $lyricLine = trim((string) $lyricLine);
+                    if ($lyricLine === '' && $lyricsHasLooseSpacing) {
+                        continue;
+                    }
+                    ?>
+                    <?php if ($lyricLine === ''): ?>
+                        <div class="song-lyrics-spacer" aria-hidden="true"></div>
+                    <?php else: ?>
+                        <div><?= htmlspecialchars($lyricLine, ENT_QUOTES, 'UTF-8') ?></div>
+                    <?php endif; ?>
+                <?php endforeach; ?>
+            <?php endif; ?>
             </div>
             <button class="song-lyrics-toggle" type="button" data-song-lyrics-toggle aria-expanded="false">
                 <span><?= music_h(music_label('music.lyrics.show_more', 'Xem thêm lời bài hát')) ?></span>
@@ -230,14 +284,14 @@ music_render_header($title, $description, music_cover($song['avatar']));
         <nav class="music-mode-switch music-related-switch" aria-label="<?= music_h(music_label('music.related_scope', 'Related song scope')) ?>">
             <a class="<?= $relatedScope === 'local' ? 'is-active' : '' ?>"
             style="display:inline-flex;align-items:center;gap:6px;white-space:nowrap;"
-            href="<?= music_h(music_url_with_query(music_song_url((string) $song['id']), ['related_scope' => 'local'])) ?>">
+            href="<?= music_h(music_url_with_query(music_song_url((string) $song['id'], $songLang), ['related_scope' => 'local'])) ?>">
                 <i class="fas fa-map-marker-alt" aria-hidden="true" style="font-size:14px;line-height:1;"></i>
                 <?= music_h(music_label('local', 'Cục bộ')) ?>
             </a>
 
             <a class="<?= $relatedScope === 'world' ? 'is-active' : '' ?>"
             style="display:inline-flex;align-items:center;gap:6px;white-space:nowrap;"
-            href="<?= music_h(music_url_with_query(music_song_url((string) $song['id']), ['related_scope' => 'world'])) ?>">
+            href="<?= music_h(music_url_with_query(music_song_url((string) $song['id'], $songLang), ['related_scope' => 'world'])) ?>">
                 <i class="fas fa-globe-asia" aria-hidden="true" style="font-size:14px;line-height:1;"></i>
                 <?= music_h(music_label('world', 'Thế giới')) ?>
             </a>
@@ -246,14 +300,15 @@ music_render_header($title, $description, music_cover($song['avatar']));
     <?php if ($relatedSongs): ?>
     <div class="grid">
         <?php foreach ($relatedSongs as $related): ?>
+            <?php $relatedUrl = music_song_url((string) $related['id'], (string) ($related['lang'] ?? '')); ?>
             <article class="song-card">
-                <a class="site-link" href="<?= music_h(music_song_url($related['id'])) ?>"><img src="<?= music_h(music_cover($related['avatar'])) ?>" alt="<?= music_h($related['name']) ?>"></a>
+                <a class="site-link" href="<?= music_h($relatedUrl) ?>"><img src="<?= music_h(music_cover($related['avatar'])) ?>" alt="<?= music_h($related['name']) ?>"></a>
                 <div class="song-card-body">
-                    <a class="song-title site-link" href="<?= music_h(music_song_url($related['id'])) ?>"><?= music_h($related['name']) ?></a>
+                    <a class="song-title site-link" href="<?= music_h($relatedUrl) ?>"><?= music_h($related['name']) ?></a>
                     <div class="song-meta"><?= music_h($related['artist_names'] ?: $related['artist']) ?></div>
                     <div class="song-card-actions">
-                        <button class="btn btn-primary" onclick="cr_player.play_emp(this)" cr-url="<?= music_h($related['mp3']) ?>" cr-name="<?= music_h($related['name']) ?>" cr-artist="<?= music_h($related['artist_names'] ?: $related['artist']) ?>" cr-avatar="<?= music_h(music_cover($related['avatar'])) ?>"><?= music_play_icon() ?><?= music_h(music_label('music.action.play', 'Phát')) ?></button>
-                        <button class="icon-btn" title="<?= music_h(music_label('music.action.add_to_playlist', 'Add to playlist')) ?>" onclick="cr_player.add_emp(this)" cr-url="<?= music_h($related['mp3']) ?>" cr-name="<?= music_h($related['name']) ?>" cr-artist="<?= music_h($related['artist_names'] ?: $related['artist']) ?>" cr-avatar="<?= music_h(music_cover($related['avatar'])) ?>"><i class="fas fa-plus"></i></button>
+                        <button class="btn btn-primary" onclick="cr_player.play_emp(this)" cr-id="<?= music_h($related['id']) ?>" cr-link="<?= music_h($relatedUrl) ?>" cr-url="<?= music_h($related['mp3']) ?>" cr-name="<?= music_h($related['name']) ?>" cr-artist="<?= music_h($related['artist_names'] ?: $related['artist']) ?>" cr-avatar="<?= music_h(music_cover($related['avatar'])) ?>"><?= music_play_icon() ?><?= music_h(music_label('music.action.play', 'Phát')) ?></button>
+                        <button class="icon-btn" title="<?= music_h(music_label('music.action.add_to_playlist', 'Add to playlist')) ?>" onclick="cr_player.add_emp(this)" cr-id="<?= music_h($related['id']) ?>" cr-link="<?= music_h($relatedUrl) ?>" cr-url="<?= music_h($related['mp3']) ?>" cr-name="<?= music_h($related['name']) ?>" cr-artist="<?= music_h($related['artist_names'] ?: $related['artist']) ?>" cr-avatar="<?= music_h(music_cover($related['avatar'])) ?>"><i class="fas fa-plus"></i></button>
                     </div>
                 </div>
             </article>
@@ -315,6 +370,9 @@ music_render_header($title, $description, music_cover($song['avatar']));
         const container = document.getElementById('song_waveform');
         const waveBox = document.getElementById('song_wave_box');
         const playButton = document.querySelector('.wave-play');
+        const loadingText = container?.querySelector('[data-wave-loading-text]');
+        const loadingPercent = container?.querySelector('[data-wave-loading-percent]');
+        const loadingBar = container?.querySelector('[data-wave-loading-bar]');
         if (!container || !playButton) return;
         if (!window.WaveSurfer || !window.cr_player || !cr_player.audio_player) {
             if (attempt < 80) window.setTimeout(() => bootWaveform(attempt + 1), 100);
@@ -328,7 +386,6 @@ music_render_header($title, $description, music_cover($song['avatar']));
         const isThisSong = () => audio.src === songUrl;
         const wave = WaveSurfer.create({
             container,
-            url: waveformUrl.href,
             height: 86,
             barWidth: 3,
             barGap: 2,
@@ -355,6 +412,13 @@ music_render_header($title, $description, music_cover($song['avatar']));
         const setWaveStatus = (status) => {
             waveBox?.classList.toggle('is-loading', status === 'loading');
             waveBox?.classList.toggle('is-error', status === 'error');
+            waveBox?.classList.toggle('is-wave-ready', status === 'ready');
+            playButton.disabled = status !== 'ready';
+        };
+        const setWaveProgress = (percent) => {
+            const value = Math.max(0, Math.min(100, Math.round(Number(percent) || 0)));
+            if (loadingPercent) loadingPercent.textContent = value + '%';
+            if (loadingBar) loadingBar.style.width = value + '%';
         };
 
         playButton.addEventListener('click', () => {
@@ -372,14 +436,20 @@ music_render_header($title, $description, music_cover($song['avatar']));
         audio.addEventListener('timeupdate', updateState);
         audio.addEventListener('loadedmetadata', updateState);
         wave.on('ready', () => {
+            setWaveProgress(100);
             setWaveStatus('ready');
             updateState();
         });
+        wave.on('loading', (percent) => {
+            setWaveStatus('loading');
+            setWaveProgress(percent);
+        });
         wave.on('error', () => {
             setWaveStatus('error');
-            const loading = container.querySelector('.wave-loading span:last-child');
-            if (loading) loading.textContent = <?= json_encode(music_label('music.wave.error', 'Chưa tải được sóng nhạc'), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>;
+            if (loadingText) loadingText.textContent = <?= json_encode(music_label('music.wave.error', 'Chưa tải được sóng nhạc'), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>;
         });
+        setWaveProgress(0);
+        wave.load(waveformUrl.href);
         updateState();
     };
 
@@ -401,7 +471,7 @@ music_render_header($title, $description, music_cover($song['avatar']));
     const lyricsButton = modal?.querySelector('[data-video-lyrics]');
     const lyricsLayer = document.getElementById('music_video_lyrics');
     const videoId = modal?.dataset.videoId || '';
-    const rawLyrics = <?= json_encode(strip_tags((string) $lyrics), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>;
+    const rawLyricsHtml = <?= json_encode((string) $lyrics, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>;
     let player = null;
     let playerReady = false;
     let lyricTimer = null;
@@ -442,18 +512,46 @@ music_render_header($title, $description, music_cover($song['avatar']));
         return parts;
     };
 
-    const buildLyricLines = () => {
-        const text = rawLyrics
+    const cleanLyricLine = (value) => String(value || '')
             .replace(/\r/g, '\n')
             .replace(/&nbsp;/gi, ' ')
             .replace(/\s+\n/g, '\n')
+            .replace(/[ \t]+/g, ' ')
             .trim();
+
+    const textWithBreaks = (element) => {
+        const clone = element.cloneNode(true);
+        clone.querySelectorAll('br').forEach((br) => br.replaceWith(document.createTextNode('\n')));
+        return cleanLyricLine(clone.textContent || '');
+    };
+
+    const htmlLyricLines = () => {
+        if (!/<\/?[a-z][\s\S]*>/i.test(rawLyricsHtml)) return [];
+        const doc = new DOMParser().parseFromString(rawLyricsHtml, 'text/html');
+        doc.querySelectorAll('script, style, noscript').forEach((node) => node.remove());
+        const blockSelector = 'div,p,li,h1,h2,h3,h4,h5,h6';
+        const blocks = Array.from(doc.body.querySelectorAll(blockSelector))
+            .filter((node) => !node.querySelector(blockSelector));
+        return blocks
+            .flatMap((node) => textWithBreaks(node).split('\n'))
+            .map(cleanLyricLine)
+            .filter(Boolean);
+    };
+
+    const plainLyricLines = () => {
+        const doc = new DOMParser().parseFromString(rawLyricsHtml, 'text/html');
+        const text = cleanLyricLine(textWithBreaks(doc.body) || rawLyricsHtml);
         if (text === '') return [];
 
         return text
             .split(/[\n.。!?！？]+/u)
             .map((line) => line.replace(/\s+/g, ' ').trim())
-            .filter(Boolean)
+            .filter(Boolean);
+    };
+
+    const buildLyricLines = () => {
+        const lines = htmlLyricLines();
+        return (lines.length ? lines : plainLyricLines())
             .flatMap((line) => splitLongLine(line));
     };
 
@@ -580,7 +678,7 @@ music_render_header($title, $description, music_cover($song['avatar']));
     'image' => music_cover($song['avatar']),
     'inAlbum' => (string) ($song['album'] ?? ''),
     'genre' => $songGenreTags ?: (string) ($song['genre'] ?? ''),
-    'url' => music_song_url((string) $song['id']),
+    'url' => music_song_url((string) $song['id'], $songLang),
 ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_PRETTY_PRINT) ?>
 </script>
 <?php music_render_footer(); ?>

@@ -131,14 +131,15 @@ music_render_header($title, $description, music_cover($artist['avatar']));
     </div>
     <div class="grid">
         <?php foreach ($songs as $song): ?>
+            <?php $songUrl = music_song_url((string) $song['id'], (string) ($song['lang'] ?? '')); ?>
             <article class="song-card">
-                <a class="site-link" href="<?= music_h(music_song_url($song['id'])) ?>"><img src="<?= music_h(music_cover($song['avatar'])) ?>" alt="<?= music_h($song['name']) ?>"></a>
+                <a class="site-link" href="<?= music_h($songUrl) ?>"><img src="<?= music_h(music_cover($song['avatar'])) ?>" alt="<?= music_h($song['name']) ?>"></a>
                 <div class="song-card-body">
-                    <a class="song-title site-link" href="<?= music_h(music_song_url($song['id'])) ?>"><?= music_h($song['name']) ?></a>
+                    <a class="song-title site-link" href="<?= music_h($songUrl) ?>"><?= music_h($song['name']) ?></a>
                     <div class="song-meta"><?= music_h($song['artist_names'] ?: $song['artist']) ?></div>
                     <div class="song-card-actions">
-                        <button class="btn btn-primary" onclick="cr_player.play_emp(this)" cr-url="<?= music_h($song['mp3']) ?>" cr-name="<?= music_h($song['name']) ?>" cr-artist="<?= music_h($song['artist_names'] ?: $song['artist']) ?>" cr-avatar="<?= music_h(music_cover($song['avatar'])) ?>"><?= music_play_icon() ?><?= music_h(music_label('music.action.play', 'Phát')) ?></button>
-                        <button class="icon-btn js-artist-song-add" title="<?= music_h(music_label('music.action.add_to_playlist', 'Thêm vào playlist')) ?>" onclick="cr_player.add_emp(this)" cr-url="<?= music_h($song['mp3']) ?>" cr-name="<?= music_h($song['name']) ?>" cr-artist="<?= music_h($song['artist_names'] ?: $song['artist']) ?>" cr-avatar="<?= music_h(music_cover($song['avatar'])) ?>"><i class="fas fa-plus"></i></button>
+                        <button class="btn btn-primary" onclick="cr_player.play_emp(this)" cr-id="<?= music_h($song['id']) ?>" cr-link="<?= music_h($songUrl) ?>" cr-url="<?= music_h($song['mp3']) ?>" cr-name="<?= music_h($song['name']) ?>" cr-artist="<?= music_h($song['artist_names'] ?: $song['artist']) ?>" cr-avatar="<?= music_h(music_cover($song['avatar'])) ?>"><?= music_play_icon() ?><?= music_h(music_label('music.action.play', 'Phát')) ?></button>
+                        <button class="icon-btn js-artist-song-add" title="<?= music_h(music_label('music.action.add_to_playlist', 'Thêm vào playlist')) ?>" onclick="cr_player.add_emp(this)" cr-id="<?= music_h($song['id']) ?>" cr-link="<?= music_h($songUrl) ?>" cr-url="<?= music_h($song['mp3']) ?>" cr-name="<?= music_h($song['name']) ?>" cr-artist="<?= music_h($song['artist_names'] ?: $song['artist']) ?>" cr-avatar="<?= music_h(music_cover($song['avatar'])) ?>"><i class="fas fa-plus"></i></button>
                     </div>
                 </div>
             </article>

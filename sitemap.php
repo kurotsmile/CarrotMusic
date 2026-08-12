@@ -63,14 +63,14 @@ music_sitemap_item(music_sitemap_public_url(music_countries_url()), '', 'weekly'
 if ($pdo instanceof PDO) {
     try {
         $stmt = $pdo->query('
-            SELECT id, created_at AS lastmod
+            SELECT id, lang, created_at AS lastmod
             FROM song
             WHERE COALESCE(id, "") <> ""
             ORDER BY created_at DESC, id ASC
         ');
         foreach ($stmt ? $stmt->fetchAll() : [] as $song) {
             music_sitemap_item(
-                music_sitemap_public_url(music_song_url((string) $song['id'])),
+                music_sitemap_public_url(music_song_url((string) $song['id'], (string) ($song['lang'] ?? ''))),
                 music_sitemap_lastmod($song['lastmod'] ?? ''),
                 'weekly',
                 '0.9'

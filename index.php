@@ -20,6 +20,7 @@ $featured = null;
 $stats = ['songs' => 0, 'artists' => 0, 'genres' => 0];
 $errorMessage = $db_error ?? '';
 $searchQuery = trim((string) ($_GET['q'] ?? ''));
+$musicBoxLimit = 28;
 
 if ($pdo instanceof PDO) {
     try {
@@ -27,7 +28,7 @@ if ($pdo instanceof PDO) {
         $cacheKey = music_cache_key('music_home', [
             'lang' => current_lang_key(),
             'q' => $searchQuery !== '' ? sha1($searchQuery) : '',
-            'view' => 'genre_cards_timeline_v5_24_new_songs_18_popular_local_switch',
+            'view' => 'genre_cards_timeline_v6_28_music_boxes_local_switch',
         ]);
         $cachedHome = music_cache_get($cacheKey, $cacheTtl);
 
@@ -54,11 +55,11 @@ if ($pdo instanceof PDO) {
                 ', [$searchValue, $searchValue, $searchValue, $searchValue, $searchValue, $searchValue]);
             } else {
                 $localLang = current_lang_key();
-                $songs = music_fetch_songs($pdo, 24);
-                $localSongs = music_fetch_songs($pdo, 24, 'TRIM(COALESCE(s.lang, "")) = ?', [$localLang]);
+                $songs = music_fetch_songs($pdo, $musicBoxLimit);
+                $localSongs = music_fetch_songs($pdo, $musicBoxLimit, 'TRIM(COALESCE(s.lang, "")) = ?', [$localLang]);
                 try {
-                    $popularSongs = music_fetch_popular_songs($pdo, 24);
-                    $localPopularSongs = music_fetch_popular_songs($pdo, 24, 'TRIM(COALESCE(s.lang, "")) = ?', [$localLang]);
+                    $popularSongs = music_fetch_popular_songs($pdo, $musicBoxLimit);
+                    $localPopularSongs = music_fetch_popular_songs($pdo, $musicBoxLimit, 'TRIM(COALESCE(s.lang, "")) = ?', [$localLang]);
                 } catch (Throwable $popularError) {
                     error_log('music_fetch_popular_songs failed: ' . $popularError->getMessage());
                     $popularSongs = [];
@@ -175,8 +176,9 @@ $renderSongGrid = static function (array $items, string $emptyLabel, bool $ranke
     <div class="grid">
         <?php foreach ($items as $rankIndex => $song): ?>
             <?php $songRank = $rankIndex + 1; ?>
+            <?php $songUrl = music_song_url((string) $song['id'], (string) ($song['lang'] ?? '')); ?>
             <article class="song-card">
-                <a class="site-link song-card-cover" href="<?= music_h(music_song_url($song['id'])) ?>">
+                <a class="site-link song-card-cover" href="<?= music_h($songUrl) ?>">
                     <img src="<?= music_h(music_cover($song['avatar'])) ?>" alt="<?= music_h($song['name']) ?>">
                     <?php if ($ranked && $songRank <= 10): ?>
                         <?php
@@ -190,7 +192,7 @@ $renderSongGrid = static function (array $items, string $emptyLabel, bool $ranke
                     <?php endif; ?>
                 </a>
                 <div class="song-card-body">
-                    <a class="song-title site-link" href="<?= music_h(music_song_url($song['id'])) ?>"><?= music_h($song['name']) ?></a>
+                    <a class="song-title site-link" href="<?= music_h($songUrl) ?>"><?= music_h($song['name']) ?></a>
                     <div class="song-meta">
                         <?= music_h($song['artist_names'] ?: $song['artist'] ?: music_label('music.label.unknown_artist', 'Unknown artist')) ?>
                         <?php if ($ranked): ?>
@@ -198,8 +200,8 @@ $renderSongGrid = static function (array $items, string $emptyLabel, bool $ranke
                         <?php endif; ?>
                     </div>
                     <div class="song-card-actions">
-                        <button class="btn btn-primary" onclick="cr_player.play_emp(this)" cr-url="<?= music_h($song['mp3']) ?>" cr-name="<?= music_h($song['name']) ?>" cr-artist="<?= music_h($song['artist_names'] ?: $song['artist']) ?>" cr-avatar="<?= music_h(music_cover($song['avatar'])) ?>"><?= music_play_icon() ?><?= music_h(music_label('music.action.play', 'Phát')) ?></button>
-                        <button class="icon-btn" title="<?= music_h(music_label('music.action.add_to_playlist', 'Thêm vào playlist')) ?>" onclick="cr_player.add_emp(this)" cr-url="<?= music_h($song['mp3']) ?>" cr-name="<?= music_h($song['name']) ?>" cr-artist="<?= music_h($song['artist_names'] ?: $song['artist']) ?>" cr-avatar="<?= music_h(music_cover($song['avatar'])) ?>"><i class="fas fa-plus"></i></button>
+                        <button class="btn btn-primary" onclick="cr_player.play_emp(this)" cr-id="<?= music_h($song['id']) ?>" cr-link="<?= music_h($songUrl) ?>" cr-url="<?= music_h($song['mp3']) ?>" cr-name="<?= music_h($song['name']) ?>" cr-artist="<?= music_h($song['artist_names'] ?: $song['artist']) ?>" cr-avatar="<?= music_h(music_cover($song['avatar'])) ?>"><?= music_play_icon() ?><?= music_h(music_label('music.action.play', 'Phát')) ?></button>
+                        <button class="icon-btn" title="<?= music_h(music_label('music.action.add_to_playlist', 'Thêm vào playlist')) ?>" onclick="cr_player.add_emp(this)" cr-id="<?= music_h($song['id']) ?>" cr-link="<?= music_h($songUrl) ?>" cr-url="<?= music_h($song['mp3']) ?>" cr-name="<?= music_h($song['name']) ?>" cr-artist="<?= music_h($song['artist_names'] ?: $song['artist']) ?>" cr-avatar="<?= music_h(music_cover($song['avatar'])) ?>"><i class="fas fa-plus"></i></button>
                     </div>
                 </div>
             </article>
@@ -217,15 +219,15 @@ $renderSongGrid = static function (array $items, string $emptyLabel, bool $ranke
         <div class="hero-stats" aria-label="<?= music_h(music_label('aria.music_stats', 'Music statistics')) ?>">
             <div class="hero-stat hero-stat--static">
                 <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 18V5l10-2v13" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><circle cx="6" cy="18" r="3" fill="none" stroke="currentColor" stroke-width="1.8"/><circle cx="16" cy="16" r="3" fill="none" stroke="currentColor" stroke-width="1.8"/></svg>
-                <span><strong><?= number_format($stats['songs']) ?></strong><small><?= music_h(music_label('music.label.songs', 'bài hát')) ?></small></span>
+                <span><strong data-hero-stat-count="<?= (int) $stats['songs'] ?>"><?= number_format($stats['songs']) ?></strong><small><?= music_h(music_label('music.label.songs', 'bài hát')) ?></small></span>
             </div>
             <a class="hero-stat" href="<?= music_h(music_artists_url()) ?>">
                 <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M16 7a4 4 0 1 1-8 0 4 4 0 0 1 8 0ZM4 21a8 8 0 0 1 16 0" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
-                <span><strong><?= number_format($stats['artists']) ?></strong><small><?= music_h(music_label('music.label.artists', 'nghệ sĩ')) ?></small></span>
+                <span><strong data-hero-stat-count="<?= (int) $stats['artists'] ?>"><?= number_format($stats['artists']) ?></strong><small><?= music_h(music_label('music.label.artists', 'nghệ sĩ')) ?></small></span>
             </a>
             <a class="hero-stat" href="<?= music_h(music_genres_url()) ?>">
                 <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M4 12h10M4 17h7" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><path d="m17 14 3 3-3 3" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
-                <span><strong><?= number_format($stats['genres']) ?></strong><small><?= music_h(music_label('music.label.genres', 'thể loại')) ?></small></span>
+                <span><strong data-hero-stat-count="<?= (int) $stats['genres'] ?>"><?= number_format($stats['genres']) ?></strong><small><?= music_h(music_label('music.label.genres', 'thể loại')) ?></small></span>
             </a>
         </div>
     </div>
@@ -365,6 +367,57 @@ $renderSongGrid = static function (array $items, string $emptyLabel, bool $ranke
 </section>
 <?php endif; ?>
 <script>
+(() => {
+    const counters = Array.from(document.querySelectorAll('[data-hero-stat-count]'));
+    if (!counters.length) return;
+
+    const formatter = new Intl.NumberFormat('en-US');
+    const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    const renderFinal = () => counters.forEach((counter) => {
+        counter.textContent = formatter.format(Math.max(0, Number.parseInt(counter.dataset.heroStatCount || '0', 10) || 0));
+    });
+
+    if (prefersReducedMotion || typeof window.requestAnimationFrame !== 'function') {
+        renderFinal();
+        return;
+    }
+
+    let started = false;
+    const runCounters = () => {
+        if (started) return;
+        started = true;
+        const duration = 1350;
+        const startedAt = performance.now();
+        counters.forEach((counter) => { counter.textContent = '0'; });
+
+        const tick = (now) => {
+            const progress = Math.min(1, (now - startedAt) / duration);
+            const eased = 1 - Math.pow(1 - progress, 3);
+            counters.forEach((counter) => {
+                const target = Math.max(0, Number.parseInt(counter.dataset.heroStatCount || '0', 10) || 0);
+                counter.textContent = formatter.format(Math.round(target * eased));
+            });
+            if (progress < 1) {
+                window.requestAnimationFrame(tick);
+            } else {
+                renderFinal();
+            }
+        };
+        window.requestAnimationFrame(tick);
+    };
+
+    if ('IntersectionObserver' in window) {
+        const observer = new IntersectionObserver((entries) => {
+            if (!entries.some((entry) => entry.isIntersecting)) return;
+            observer.disconnect();
+            runCounters();
+        }, { threshold: 0.35 });
+        observer.observe(counters[0].closest('.hero-stats') || counters[0]);
+    } else {
+        runCounters();
+    }
+})();
+
 (() => {
     const storageKey = 'music_home_scope_mode';
     const validModes = ['world', 'local'];
