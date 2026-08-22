@@ -21,6 +21,7 @@ if ($pdo instanceof PDO && ($artistId > 0 || $artistSlug !== '')) {
         }
         $cacheKey = music_cache_key('music_artist_detail', [
             'id' => $artistId,
+            'sort' => 'song_date_desc',
         ]);
         $cachedArtist = music_cache_get($cacheKey, 86400);
 
@@ -37,7 +38,7 @@ if ($pdo instanceof PDO && ($artistId > 0 || $artistSlug !== '')) {
                     LEFT JOIN song_artist_map sam ON sam.song_id = s.id
                     LEFT JOIN song_artist sa ON sa.id = sam.artist_id
                     GROUP BY s.id
-                    ORDER BY s.created_at DESC, s.id ASC
+                    ORDER BY s.`date` DESC, s.id DESC
                 ');
                 $stmt->execute([$artistId]);
                 $songs = $stmt->fetchAll();

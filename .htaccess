@@ -24,6 +24,7 @@ RewriteEngine On
 RewriteRule ^sitemap\.xml$ sitemap.php [QSA,L]
 RewriteRule ^artists/?$ list_artist.php [QSA,L]
 RewriteRule ^genres/?$ list_genre.php [QSA,L]
+RewriteRule ^rank/?$ rank.php [QSA,L]
 RewriteRule ^countries/?$ music_tourism.php [QSA,L]
 RewriteRule ^artist/([^/]+)/?$ artist.php?slug=$1 [QSA,L,B]
 RewriteRule ^genre/([^/]+)/?$ genre.php?slug=$1 [QSA,L,B]
@@ -34,5 +35,5 @@ RewriteRule ^songs/([A-Za-z0-9_-]+)/([^/]+)/?$ song.php?lang=$1&id=$2 [QSA,L]
 
 RewriteCond %{REQUEST_FILENAME} !-f
 RewriteCond %{REQUEST_FILENAME} !-d
-RewriteCond %{REQUEST_URI} !^/(index|song|artist|genre|song_year|list_artist|list_genre|music_tourism|profile|social-login|oauth-callback|paypal-create|paypal-return|sitemap)\.php
+RewriteCond %{REQUEST_URI} !^/(index|song|artist|genre|rank|song_year|list_artist|list_genre|music_tourism|profile|social-login|oauth-callback|paypal-create|paypal-return|sitemap)\.php
 RewriteRule ^([^/]+)/?$ song.php?id=$1 [QSA,L,B]

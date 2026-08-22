@@ -65,6 +65,7 @@ if ($pdo instanceof PDO && ($genreId !== '' || $genreSlug !== '')) {
             'id' => $genreId,
             'scope' => $songScope,
             'lang' => $songScope === 'local' ? $localLang : '',
+            'desc_lang' => $localLang,
             'page' => $currentPage,
             'per_page' => $songsPerPage,
         ]);

@@ -9,6 +9,7 @@ if ($selectedCountry !== '' && !preg_match('/^[A-Z]{2}$/', $selectedCountry)) {
 $countries = [];
 $selectedCountryRow = null;
 $songs = [];
+$monthlyRankSongs = [];
 $artists = [];
 $stats = ['countries' => 0, 'songs' => 0, 'artists' => 0];
 $errorMessage = $db_error ?? '';
@@ -58,6 +59,7 @@ if ($pdo instanceof PDO) {
         if ($selectedCountryRow) {
             $selectedLang = (string) ($selectedCountryRow['lang_key'] ?? '');
             $songs = music_fetch_songs($pdo, 24, 'LOWER(s.lang) = LOWER(?)', [$selectedLang]);
+            $monthlyRankSongs = music_fetch_monthly_rank_songs($pdo, date('Y-m'), 12, 0, $selectedLang);
 
             $artistStmt = $pdo->prepare('
                 SELECT sa.*, COUNT(sam.song_id) AS song_count
@@ -212,8 +214,48 @@ foreach ($countries as $country) {
 	                        <i class="fas fa-arrow-right" aria-hidden="true"></i>
 	                    </a>
 	                <?php endif; ?>
-	            </div>
+            </div>
         </div>
+        <?php if ($monthlyRankSongs): ?>
+            <div class="tourism-monthly-rank">
+                <div class="section-head">
+                    <div>
+                        <h3><?= music_h(sprintf(music_label('music.tourism.monthly_rank_title', 'Bảng xếp hạng tháng tại %s'), (string) ($selectedCountryRow['name'] ?? $selectedCountry))) ?></h3>
+                        <p><?= music_h(sprintf(music_label('music.tourism.monthly_rank_hint', 'Những bài hát có lượt nghe nổi bật trong tháng %s.'), date('m/Y'))) ?></p>
+                    </div>
+                </div>
+                <div class="grid">
+                    <?php foreach ($monthlyRankSongs as $rankIndex => $song): ?>
+                        <?php
+                        $songRank = $rankIndex + 1;
+                        $songUrl = music_song_url((string) $song['id'], (string) ($song['lang'] ?? ''));
+                        $rankClass = $songRank <= 3 ? ' is-top-' . $songRank : '';
+                        $rankIcon = $songRank === 1 ? 'fa-crown' : ($songRank === 2 ? 'fa-medal' : ($songRank === 3 ? 'fa-award' : ''));
+                        ?>
+                        <article class="song-card">
+                            <a class="site-link song-card-cover" href="<?= music_h($songUrl) ?>">
+                                <img src="<?= music_h(music_cover($song['avatar'])) ?>" alt="<?= music_h($song['name']) ?>">
+                                <span class="song-rank-badge<?= $rankClass ?>" aria-label="<?= music_h(sprintf(music_label('aria.song_rank', 'Rank %s'), (string) $songRank)) ?>">
+                                    <?php if ($rankIcon !== ''): ?><i class="fas <?= music_h($rankIcon) ?>" aria-hidden="true"></i><?php endif; ?>
+                                    <span>#<?= number_format($songRank) ?></span>
+                                </span>
+                            </a>
+                            <div class="song-card-body">
+                                <a class="song-title site-link" href="<?= music_h($songUrl) ?>"><?= music_h($song['name']) ?></a>
+                                <div class="song-meta">
+                                    <?= music_h($song['artist_names'] ?: $song['artist'] ?: music_label('music.label.unknown_artist', 'Unknown artist')) ?>
+                                    · <?= number_format((int) ($song['view_count'] ?? 0)) ?> <?= music_h(music_label('music.listen.count', 'lượt nghe')) ?>
+                                </div>
+                                <div class="song-card-actions">
+                                    <button class="btn btn-primary" onclick="cr_player.play_emp(this)" cr-id="<?= music_h($song['id']) ?>" cr-link="<?= music_h($songUrl) ?>" cr-url="<?= music_h($song['mp3']) ?>" cr-name="<?= music_h($song['name']) ?>" cr-artist="<?= music_h($song['artist_names'] ?: $song['artist']) ?>" cr-avatar="<?= music_h(music_cover($song['avatar'])) ?>"><?= music_play_icon() ?><?= music_h(music_label('music.action.play', 'Phát')) ?></button>
+                                    <button class="icon-btn" title="<?= music_h(music_label('music.action.add_to_playlist', 'Thêm vào playlist')) ?>" onclick="cr_player.add_emp(this)" cr-id="<?= music_h($song['id']) ?>" cr-link="<?= music_h($songUrl) ?>" cr-url="<?= music_h($song['mp3']) ?>" cr-name="<?= music_h($song['name']) ?>" cr-artist="<?= music_h($song['artist_names'] ?: $song['artist']) ?>" cr-avatar="<?= music_h(music_cover($song['avatar'])) ?>"><i class="fas fa-plus"></i></button>
+                                </div>
+                            </div>
+                        </article>
+                    <?php endforeach; ?>
+                </div>
+            </div>
+        <?php endif; ?>
     <?php endif; ?>
 </section>
 

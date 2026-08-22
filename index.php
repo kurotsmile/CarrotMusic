@@ -11,6 +11,7 @@ music_redirect_to_canonical(music_home_url(), []);
 
 $songs = [];
 $popularSongs = [];
+$monthlyRankSongs = [];
 $localSongs = [];
 $localPopularSongs = [];
 $genres = [];
@@ -28,13 +29,14 @@ if ($pdo instanceof PDO) {
         $cacheKey = music_cache_key('music_home', [
             'lang' => current_lang_key(),
             'q' => $searchQuery !== '' ? sha1($searchQuery) : '',
-            'view' => 'genre_cards_timeline_v6_28_music_boxes_local_switch',
+            'view' => 'genre_cards_timeline_v7_monthly_rank_lang_cards',
         ]);
         $cachedHome = music_cache_get($cacheKey, $cacheTtl);
 
         if (is_array($cachedHome)) {
             $songs = is_array($cachedHome['songs'] ?? null) ? $cachedHome['songs'] : [];
             $popularSongs = is_array($cachedHome['popular_songs'] ?? null) ? $cachedHome['popular_songs'] : [];
+            $monthlyRankSongs = is_array($cachedHome['monthly_rank_songs'] ?? null) ? $cachedHome['monthly_rank_songs'] : [];
             $localSongs = is_array($cachedHome['local_songs'] ?? null) ? $cachedHome['local_songs'] : [];
             $localPopularSongs = is_array($cachedHome['local_popular_songs'] ?? null) ? $cachedHome['local_popular_songs'] : [];
             $stats = is_array($cachedHome['stats'] ?? null) ? array_merge($stats, $cachedHome['stats']) : $stats;
@@ -60,44 +62,85 @@ if ($pdo instanceof PDO) {
                 try {
                     $popularSongs = music_fetch_popular_songs($pdo, $musicBoxLimit);
                     $localPopularSongs = music_fetch_popular_songs($pdo, $musicBoxLimit, 'TRIM(COALESCE(s.lang, "")) = ?', [$localLang]);
+                    $monthlyRankSongs = music_fetch_monthly_rank_songs($pdo, date('Y-m'), 14, 0, $localLang);
                 } catch (Throwable $popularError) {
                     error_log('music_fetch_popular_songs failed: ' . $popularError->getMessage());
                     $popularSongs = [];
                     $localPopularSongs = [];
+                    $monthlyRankSongs = [];
                 }
             }
             $stats['songs'] = (int) $pdo->query('SELECT COUNT(*) FROM song')->fetchColumn();
             $stats['artists'] = (int) $pdo->query('SELECT COUNT(*) FROM song_artist')->fetchColumn();
             $stats['genres'] = (int) $pdo->query('SELECT COUNT(*) FROM song_genre')->fetchColumn();
-            $genres = $pdo->query('
+            $genreStmt = $pdo->prepare('
                 SELECT g.genre_id, g.title, g.avatar, COUNT(DISTINCT s.id) AS song_count
                 FROM song_genre g
-                LEFT JOIN song s ON FIND_IN_SET(REPLACE(g.genre_id, " ", ""), REPLACE(COALESCE(s.genre, ""), " ", "")) > 0
+                INNER JOIN song s ON FIND_IN_SET(REPLACE(g.genre_id, " ", ""), REPLACE(COALESCE(s.genre, ""), " ", "")) > 0
+                    AND TRIM(COALESCE(s.lang, "")) = ?
                 GROUP BY g.genre_id, g.title, g.avatar
                 ORDER BY RAND()
                 LIMIT 20
-            ')->fetchAll();
+            ');
+            $genreStmt->execute([current_lang_key()]);
+            $genres = $genreStmt->fetchAll();
+            if (!$genres) {
+                $genres = $pdo->query('
+                    SELECT g.genre_id, g.title, g.avatar, COUNT(DISTINCT s.id) AS song_count
+                    FROM song_genre g
+                    LEFT JOIN song s ON FIND_IN_SET(REPLACE(g.genre_id, " ", ""), REPLACE(COALESCE(s.genre, ""), " ", "")) > 0
+                    GROUP BY g.genre_id, g.title, g.avatar
+                    ORDER BY RAND()
+                    LIMIT 20
+                ')->fetchAll();
+            }
             if ($searchQuery !== '') {
                 $artistStmt = $pdo->prepare('
                     SELECT sa.*, COUNT(sam.song_id) AS song_count
                     FROM song_artist sa
                     LEFT JOIN song_artist_map sam ON sam.artist_id = sa.id
-                    WHERE sa.name LIKE ?
+                    WHERE sa.name LIKE ? AND TRIM(COALESCE(sa.lang_key, "")) = ?
                     GROUP BY sa.id
                     ORDER BY RAND()
                     LIMIT 16
                 ');
-                $artistStmt->execute(['%' . $searchQuery . '%']);
+                $artistStmt->execute(['%' . $searchQuery . '%', current_lang_key()]);
                 $artists = $artistStmt->fetchAll();
+                if (!$artists) {
+                    $artistStmt = $pdo->prepare('
+                        SELECT sa.*, COUNT(sam.song_id) AS song_count
+                        FROM song_artist sa
+                        LEFT JOIN song_artist_map sam ON sam.artist_id = sa.id
+                        WHERE sa.name LIKE ?
+                        GROUP BY sa.id
+                        ORDER BY RAND()
+                        LIMIT 16
+                    ');
+                    $artistStmt->execute(['%' . $searchQuery . '%']);
+                    $artists = $artistStmt->fetchAll();
+                }
             } else {
-                $artists = $pdo->query('
+                $artistStmt = $pdo->prepare('
                     SELECT sa.*, COUNT(sam.song_id) AS song_count
                     FROM song_artist sa
                     LEFT JOIN song_artist_map sam ON sam.artist_id = sa.id
+                    WHERE TRIM(COALESCE(sa.lang_key, "")) = ?
                     GROUP BY sa.id
                     ORDER BY RAND()
                     LIMIT 16
-                ')->fetchAll();
+                ');
+                $artistStmt->execute([current_lang_key()]);
+                $artists = $artistStmt->fetchAll();
+                if (!$artists) {
+                    $artists = $pdo->query('
+                        SELECT sa.*, COUNT(sam.song_id) AS song_count
+                        FROM song_artist sa
+                        LEFT JOIN song_artist_map sam ON sam.artist_id = sa.id
+                        GROUP BY sa.id
+                        ORDER BY RAND()
+                        LIMIT 16
+                    ')->fetchAll();
+                }
             }
             $timelineYears = $pdo->query('
                 SELECT CAST(TRIM(year) AS UNSIGNED) AS song_year, COUNT(*) AS song_count
@@ -112,6 +155,7 @@ if ($pdo instanceof PDO) {
                 'created_at' => date('c'),
                 'songs' => $songs,
                 'popular_songs' => $popularSongs,
+                'monthly_rank_songs' => $monthlyRankSongs,
                 'local_songs' => $localSongs,
                 'local_popular_songs' => $localPopularSongs,
                 'stats' => $stats,
@@ -293,6 +337,19 @@ $renderSongGrid = static function (array $items, string $emptyLabel, bool $ranke
 </section>
 <?php endif; ?>
 
+<?php if ($searchQuery === '' && $monthlyRankSongs): ?>
+<section class="section" data-music-mode-section="monthly_rank">
+    <div class="section-head">
+        <div>
+            <h2><?= music_h(sprintf(music_label('music.rank.heading', 'Bảng xếp hạng tháng %s'), date('m/Y'))) ?></h2>
+            <p><?= music_h(sprintf(music_label('music.rank.monthly_intro', 'Những bài hát có lượt nghe nổi bật trong tháng %s.'), date('m/Y'))) ?></p>
+        </div>
+        <a class="section-view-all" href="<?= music_h(music_rank_url()) ?>"><?= music_h(music_label('action.view_all', 'Xem tất cả')) ?><i class="fas fa-arrow-right"></i></a>
+    </div>
+    <?php $renderSongGrid($monthlyRankSongs, music_label('music.rank.empty_month', 'Tháng này chưa có dữ liệu xếp hạng.'), true); ?>
+</section>
+<?php endif; ?>
+
 <section class="section" id="genres">
     <div class="section-head">
         <div><h2><?= music_h(music_label('music.label.genres', 'Thể loại')) ?></h2><p><?= music_h(music_label('music.genres_intro', 'Khám phá nhạc theo màu sắc và mood.')) ?></p></div>
@@ -375,6 +432,8 @@ $renderSongGrid = static function (array $items, string $emptyLabel, bool $ranke
     const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
     const renderFinal = () => counters.forEach((counter) => {
         counter.textContent = formatter.format(Math.max(0, Number.parseInt(counter.dataset.heroStatCount || '0', 10) || 0));
+        counter.style.setProperty('--hero-stat-progress', '1');
+        counter.style.color = 'rgb(255, 216, 74)';
     });
 
     if (prefersReducedMotion || typeof window.requestAnimationFrame !== 'function') {
@@ -396,11 +455,15 @@ $renderSongGrid = static function (array $items, string $emptyLabel, bool $ranke
             counters.forEach((counter) => {
                 const target = Math.max(0, Number.parseInt(counter.dataset.heroStatCount || '0', 10) || 0);
                 counter.textContent = formatter.format(Math.round(target * eased));
+                counter.style.setProperty('--hero-stat-progress', String(eased));
+                const channel = Math.round(255 - ((255 - 216) * eased));
+                counter.style.color = `rgb(255, ${channel}, ${Math.round(255 - ((255 - 74) * eased))})`;
             });
             if (progress < 1) {
                 window.requestAnimationFrame(tick);
             } else {
                 renderFinal();
+                counters.forEach((counter) => counter.classList.add('is-complete'));
             }
         };
         window.requestAnimationFrame(tick);

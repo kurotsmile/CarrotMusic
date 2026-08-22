@@ -301,6 +301,11 @@ function music_genres_url(): string
     return music_url('genres');
 }
 
+function music_rank_url(string $month = ''): string
+{
+    return music_url_with_query(music_url('rank'), ['month' => preg_match('/^[0-9]{4}-[0-9]{2}$/', $month) ? $month : '']);
+}
+
 function music_countries_url(): string
 {
     return music_url('countries');
@@ -601,6 +606,76 @@ function music_fetch_popular_songs(PDO $pdo, int $limit = 14, string $where = ''
     return $stmt->fetchAll();
 }
 
+function music_fetch_monthly_rank_songs(PDO $pdo, string $month, int $limit = 14, int $offset = 0, string $langKey = ''): array
+{
+    if (!preg_match('/^[0-9]{4}-[0-9]{2}$/', $month)) {
+        $month = date('Y-m');
+    }
+    $startDate = $month . '-01';
+    $endDate = date('Y-m-d', strtotime($startDate . ' +1 month'));
+    $langKey = trim($langKey);
+    $sql = '
+        SELECT s.*, ranked.view_count, ranked.last_viewed_at,
+               GROUP_CONCAT(DISTINCT sa.name ORDER BY sa.name SEPARATOR ", ") AS artist_names
+        FROM (
+            SELECT song_id, SUM(hits) AS view_count, MAX(last_seen_at) AS last_viewed_at
+            FROM song_view
+            WHERE view_date >= ? AND view_date < ?
+            GROUP BY song_id
+        ) ranked
+        INNER JOIN song s ON s.id = ranked.song_id
+        LEFT JOIN song_artist_map sam ON sam.song_id = s.id
+        LEFT JOIN song_artist sa ON sa.id = sam.artist_id
+        WHERE 1 = 1
+    ';
+    $params = [$startDate, $endDate];
+    if ($langKey !== '') {
+        $sql .= ' AND TRIM(COALESCE(s.lang, "")) = ?';
+        $params[] = $langKey;
+    }
+    $sql .= '
+        GROUP BY s.id
+        ORDER BY ranked.view_count DESC, MAX(ranked.last_viewed_at) DESC, s.id ASC
+        LIMIT ? OFFSET ?
+    ';
+    $stmt = $pdo->prepare($sql);
+    $bindIndex = 1;
+    foreach ($params as $param) {
+        $stmt->bindValue($bindIndex++, $param);
+    }
+    $stmt->bindValue($bindIndex++, max(1, $limit), PDO::PARAM_INT);
+    $stmt->bindValue($bindIndex, max(0, $offset), PDO::PARAM_INT);
+    $stmt->execute();
+    return $stmt->fetchAll();
+}
+
+function music_count_monthly_rank_songs(PDO $pdo, string $month, string $langKey = ''): int
+{
+    if (!preg_match('/^[0-9]{4}-[0-9]{2}$/', $month)) {
+        $month = date('Y-m');
+    }
+    $startDate = $month . '-01';
+    $endDate = date('Y-m-d', strtotime($startDate . ' +1 month'));
+    $langKey = trim($langKey);
+    $langWhere = $langKey !== '' ? ' INNER JOIN song s ON s.id = ranked.song_id AND TRIM(COALESCE(s.lang, "")) = ?' : '';
+    $stmt = $pdo->prepare('
+        SELECT COUNT(*)
+        FROM (
+            SELECT song_id
+            FROM song_view
+            WHERE view_date >= ? AND view_date < ?
+            GROUP BY song_id
+        ) ranked
+        ' . $langWhere . '
+    ');
+    $params = [$startDate, $endDate];
+    if ($langKey !== '') {
+        $params[] = $langKey;
+    }
+    $stmt->execute($params);
+    return (int) $stmt->fetchColumn();
+}
+
 function music_fetch_song(PDO $pdo, string $id): ?array
 {
     $stmt = $pdo->prepare('
@@ -664,14 +739,15 @@ function music_fetch_genre(PDO $pdo, string $id): ?array
     }
 
     $stmt = $pdo->prepare('
-        SELECT g.*, COUNT(DISTINCT s.id) AS song_count
+        SELECT g.*, COALESCE(NULLIF(gl.description, ""), g.description) AS description, g.description AS default_description, COUNT(DISTINCT s.id) AS song_count
         FROM song_genre g
+        LEFT JOIN song_genre_lang gl ON gl.genre_id = g.genre_id AND gl.lang_key = ?
         LEFT JOIN song s ON FIND_IN_SET(REPLACE(g.genre_id, " ", ""), REPLACE(COALESCE(s.genre, ""), " ", "")) > 0
         WHERE g.genre_id = ?
         GROUP BY g.genre_id
         LIMIT 1
     ');
-    $stmt->execute([$id]);
+    $stmt->execute([current_lang_key(), $id]);
     $row = $stmt->fetch();
     if ($row) {
         return $row;
@@ -901,6 +977,9 @@ function music_render_footer(): void
             </div>
         <?php endif; ?>
     </nav>
+    <button class="music-scroll-top" type="button" aria-label="<?= music_h(music_label('scroll_top', 'Scroll to top')) ?>" title="<?= music_h(music_label('scroll_top', 'Scroll to top')) ?>">
+        <i class="fas fa-arrow-up" aria-hidden="true"></i>
+    </button>
 </footer>
 <script src="<?= music_h(music_url('cr_player/cr_player.js?v=' . $playerVersion)) ?>"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
@@ -1431,6 +1510,23 @@ if (musicHeader && musicHeaderMenuToggle) {
             setMusicHeaderMenu(false);
         }
     });
+}
+
+const musicScrollTopButton = document.querySelector('.music-scroll-top');
+if (musicScrollTopButton) {
+    const syncMusicScrollTop = () => {
+        musicScrollTopButton.classList.toggle('is-visible', window.scrollY > 360);
+    };
+    musicScrollTopButton.addEventListener('click', () => {
+        if (typeof window.scrollTo === 'function') {
+            window.scrollTo({top: 0, behavior: 'smooth'});
+            return;
+        }
+        document.documentElement.scrollTop = 0;
+        document.body.scrollTop = 0;
+    });
+    window.addEventListener('scroll', syncMusicScrollTop, {passive: true});
+    syncMusicScrollTop();
 }
 
 if (window.jQuery && jQuery.fn.select2) {
