@@ -29,7 +29,7 @@ if ($pdo instanceof PDO) {
         $cacheKey = music_cache_key('music_home', [
             'lang' => current_lang_key(),
             'q' => $searchQuery !== '' ? sha1($searchQuery) : '',
-            'view' => 'genre_cards_timeline_v7_monthly_rank_lang_cards',
+            'view' => 'genre_cards_timeline_v8_local_first',
         ]);
         $cachedHome = music_cache_get($cacheKey, $cacheTtl);
 
@@ -167,7 +167,7 @@ if ($pdo instanceof PDO) {
         if ($searchQuery !== '') {
             music_log_song_search($pdo, $searchQuery, count($songs));
         }
-        $featured = $songs[0] ?? null;
+        $featured = ($searchQuery === '' && $localSongs ? $localSongs[0] : null) ?? ($songs[0] ?? null);
     } catch (Throwable $e) {
         $errorMessage = $e->getMessage();
     }
@@ -203,13 +203,14 @@ $heroSlides = [
         'url' => 'https://carrot28.com/Music-for-life',
     ],
 ];
-$renderMusicModeSwitch = static function (string $sectionKey): void {
+$renderMusicModeSwitch = static function (string $sectionKey, string $defaultMode = 'world'): void {
+    $defaultMode = $defaultMode === 'local' ? 'local' : 'world';
     ?>
-    <div class="music-mode-switch" data-music-mode-switch="<?= music_h($sectionKey) ?>" role="group" aria-label="<?= music_h(music_label('aria.music_scope_switch', 'Chọn phạm vi bài hát')) ?>">
-        <button type="button" class="is-active" data-music-mode-button="world" aria-label="<?= music_h(music_label('world', 'Thế giới')) ?>" title="<?= music_h(music_label('world', 'Thế giới')) ?>">
+    <div class="music-mode-switch" data-music-mode-switch="<?= music_h($sectionKey) ?>" data-music-default-mode="<?= music_h($defaultMode) ?>" role="group" aria-label="<?= music_h(music_label('aria.music_scope_switch', 'Chọn phạm vi bài hát')) ?>">
+        <button type="button" class="<?= $defaultMode === 'world' ? 'is-active' : '' ?>" data-music-mode-button="world" aria-label="<?= music_h(music_label('world', 'Thế giới')) ?>" title="<?= music_h(music_label('world', 'Thế giới')) ?>">
             <i class="fas fa-globe-asia" aria-hidden="true"></i>
         </button>
-        <button type="button" data-music-mode-button="local" aria-label="<?= music_h(music_label('local', 'Địa phương')) ?>" title="<?= music_h(music_label('local', 'Địa phương')) ?>">
+        <button type="button" class="<?= $defaultMode === 'local' ? 'is-active' : '' ?>" data-music-mode-button="local" aria-label="<?= music_h(music_label('local', 'Địa phương')) ?>" title="<?= music_h(music_label('local', 'Địa phương')) ?>">
             <i class="fas fa-map-marker-alt" aria-hidden="true"></i>
         </button>
     </div>
@@ -312,12 +313,12 @@ $renderSongGrid = static function (array $items, string $emptyLabel, bool $ranke
             <h2><?= music_h($searchQuery !== '' ? music_label('music.search_results', 'Kết quả tìm kiếm') : music_label('music.new_songs', 'New song')) ?></h2>
             <p><?= music_h($searchQuery !== '' ? sprintf(music_label('music.search_hint', 'Từ khóa: "%s"'), $searchQuery) : music_label('music.new_songs_intro', 'Chọn một bài để nghe ngay hoặc lưu vào danh sách yêu thích của bạn.')) ?></p>
         </div>
-        <?php if ($searchQuery === ''): ?><?php $renderMusicModeSwitch('new_songs'); ?><?php endif; ?>
+        <?php if ($searchQuery === ''): ?><?php $renderMusicModeSwitch('new_songs', $localSongs ? 'local' : 'world'); ?><?php endif; ?>
     </div>
     <?php if ($errorMessage): ?><div class="empty"><?= music_h($errorMessage) ?></div><?php endif; ?>
     <?php if ($searchQuery === ''): ?>
-        <div data-music-mode-panel="world"><?php $renderSongGrid($songs, music_label('music.empty.no_songs', 'Hiện chưa có bài hát nào để hiển thị.')); ?></div>
-        <div data-music-mode-panel="local" hidden><?php $renderSongGrid($localSongs, music_label('music.empty.no_local_songs', 'Chưa có bài hát địa phương cho ngôn ngữ hiện tại.')); ?></div>
+        <div data-music-mode-panel="world" <?= $localSongs ? 'hidden' : '' ?>><?php $renderSongGrid($songs, music_label('music.empty.no_songs', 'Hiện chưa có bài hát nào để hiển thị.')); ?></div>
+        <div data-music-mode-panel="local" <?= $localSongs ? '' : 'hidden' ?>><?php $renderSongGrid($localSongs, music_label('music.empty.no_local_songs', 'Chưa có bài hát địa phương cho ngôn ngữ hiện tại.')); ?></div>
     <?php else: ?>
         <?php $renderSongGrid($songs, music_label('music.empty.no_songs', 'Hiện chưa có bài hát nào để hiển thị.')); ?>
     <?php endif; ?>
@@ -330,10 +331,10 @@ $renderSongGrid = static function (array $items, string $emptyLabel, bool $ranke
             <h2><?= music_h(music_label('music.section.popular_songs', 'Nghe nhiều nhất')) ?></h2>
             <p><?= music_h(music_label('music.section.popular_songs_intro', 'Những giai điệu đang được nhiều người chọn nghe gần đây.')) ?></p>
         </div>
-        <?php $renderMusicModeSwitch('popular_songs'); ?>
+        <?php $renderMusicModeSwitch('popular_songs', $localPopularSongs ? 'local' : 'world'); ?>
     </div>
-    <div data-music-mode-panel="world"><?php $renderSongGrid($popularSongs, music_label('music.empty.no_popular_songs', 'Chưa có dữ liệu nghe nhiều nhất.'), true); ?></div>
-    <div data-music-mode-panel="local" hidden><?php $renderSongGrid($localPopularSongs, music_label('music.empty.no_local_popular_songs', 'Chưa có dữ liệu nghe nhiều nhất tại địa phương.'), true); ?></div>
+    <div data-music-mode-panel="world" <?= $localPopularSongs ? 'hidden' : '' ?>><?php $renderSongGrid($popularSongs, music_label('music.empty.no_popular_songs', 'Chưa có dữ liệu nghe nhiều nhất.'), true); ?></div>
+    <div data-music-mode-panel="local" <?= $localPopularSongs ? '' : 'hidden' ?>><?php $renderSongGrid($localPopularSongs, music_label('music.empty.no_local_popular_songs', 'Chưa có dữ liệu nghe nhiều nhất tại địa phương.'), true); ?></div>
 </section>
 <?php endif; ?>
 
@@ -482,29 +483,23 @@ $renderSongGrid = static function (array $items, string $emptyLabel, bool $ranke
 })();
 
 (() => {
-    const storageKey = 'music_home_scope_mode';
     const validModes = ['world', 'local'];
-    const readSavedMode = () => {
-        try {
-            const value = localStorage.getItem(storageKey);
-            return validModes.includes(value) ? value : 'world';
-        } catch (error) {
-            return 'world';
+
+    const sectionDefaultMode = (switcher, localPanel) => {
+        const configuredMode = switcher.dataset.musicDefaultMode;
+        if (configuredMode === 'local' && localPanel?.querySelector('.song-card')) {
+            return 'local';
         }
-    };
-    const writeSavedMode = (mode) => {
-        try {
-            localStorage.setItem(storageKey, mode);
-        } catch (error) {
-        }
+        return 'world';
     };
 
-    const applyMode = (mode) => {
-        const activeMode = validModes.includes(mode) ? mode : 'world';
+    const applyMode = (mode = '') => {
+        const requestedMode = validModes.includes(mode) ? mode : '';
         document.querySelectorAll('[data-music-mode-switch]').forEach((switcher) => {
             const section = switcher.dataset.musicModeSwitch;
             const localPanel = document.querySelector(`[data-music-mode-section="${section}"] [data-music-mode-panel="local"]`);
             const worldPanel = document.querySelector(`[data-music-mode-section="${section}"] [data-music-mode-panel="world"]`);
+            const activeMode = requestedMode || sectionDefaultMode(switcher, localPanel);
             const sectionMode = activeMode === 'local' && localPanel?.querySelector('.song-card') ? 'local' : 'world';
             if (worldPanel) worldPanel.hidden = sectionMode !== 'world';
             if (localPanel) localPanel.hidden = sectionMode !== 'local';
@@ -514,7 +509,6 @@ $renderSongGrid = static function (array $items, string $emptyLabel, bool $ranke
                 button.setAttribute('aria-pressed', isActive ? 'true' : 'false');
             });
         });
-        writeSavedMode(activeMode);
     };
 
     document.addEventListener('click', (event) => {
@@ -523,7 +517,7 @@ $renderSongGrid = static function (array $items, string $emptyLabel, bool $ranke
         applyMode(button.dataset.musicModeButton);
     });
 
-    applyMode(readSavedMode());
+    applyMode();
 })();
 
 (() => {

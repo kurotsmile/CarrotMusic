@@ -134,6 +134,11 @@ function music_play_icon(): string
     return '<svg class="btn-icon" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="currentColor"><path d="M8 5.14v13.72c0 .76.84 1.22 1.48.81l10.78-6.86a.96.96 0 0 0 0-1.62L9.48 4.33A.96.96 0 0 0 8 5.14Z"/></svg>';
 }
 
+function music_download_icon(): string
+{
+    return '<svg class="btn-icon" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v11"/><path d="m7 9 5 5 5-5"/><path d="M5 18h14"/></svg>';
+}
+
 function music_tourism_icon(): string
 {
     return '<svg class="tourism-icon" width="15" height="15" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M21.2 3.45c.5.5.46 1.34-.09 1.88l-4.94 4.94 2.23 7.88-1.55 1.55-3.74-6.32-3.22 3.22.3 2.33-1.27 1.27-1.12-3.32-3.32-1.12 1.27-1.27 2.33.3 3.22-3.22-6.32-3.74L6.53 6.3l7.88 2.23 4.94-4.94c.54-.55 1.38-.59 1.85-.14Z" fill="currentColor"/></svg>';
@@ -808,12 +813,16 @@ function music_render_header(string $title, string $description = '', string $im
         }
     }
     $styleVersion = is_file(__DIR__ . '/../style.css') ? (string) filemtime(__DIR__ . '/../style.css') : '1';
+    $manifestVersion = is_file(__DIR__ . '/../favicon/site.webmanifest') ? (string) filemtime(__DIR__ . '/../favicon/site.webmanifest') : '1';
     ?>
 <!doctype html>
 <html lang="<?= music_h($lang) ?>">
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="theme-color" content="#100b09">
+    <meta name="msapplication-TileColor" content="#100b09">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <title><?= music_h($title) ?></title>
     <meta name="description" content="<?= music_h($description) ?>">
     <?= carrot_google_search_verification_meta($GLOBALS['pdo'] ?? null, 'CarrotMusic') ?>
@@ -825,7 +834,7 @@ function music_render_header(string $title, string $description = '', string $im
     <link rel="apple-touch-icon" sizes="180x180" href="<?= music_h(music_url('favicon/apple-touch-icon.png')) ?>">
     <link rel="icon" type="image/png" sizes="32x32" href="<?= music_h(music_url('favicon/favicon-32x32.png')) ?>">
     <link rel="icon" type="image/png" sizes="16x16" href="<?= music_h(music_url('favicon/favicon-16x16.png')) ?>">
-    <link rel="manifest" href="<?= music_h(music_url('favicon/site.webmanifest')) ?>">
+    <link rel="manifest" href="<?= music_h(music_url('favicon/site.webmanifest?v=' . $manifestVersion)) ?>">
     <link rel="shortcut icon" href="<?= music_h(music_url('favicon/favicon.ico')) ?>">
     <link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://unpkg.com/tippy.js@6/dist/tippy.css">
@@ -1609,7 +1618,7 @@ if (window.tippy) {
         item.dataset.tooltipLabel = item.getAttribute('title') || '';
         item.removeAttribute('title');
     });
-    tippy('button[aria-label], a[aria-label]:not(.js-music-profile-popover), .icon-btn[data-tooltip-label]', {
+    tippy('button[aria-label], a[aria-label]:not(.js-music-profile-popover), .icon-btn[data-tooltip-label], .year-tag[data-tooltip-label]', {
         content(reference) {
             return reference.getAttribute('aria-label') || reference.dataset.tooltipLabel || reference.getAttribute('title') || '';
         },

@@ -101,6 +101,7 @@ $artistName = (string) ($song['artist_names'] ?: $song['artist'] ?: music_label(
 $songGenreTags = music_split_genres((string) ($song['genre'] ?? ''));
 $songAlbum = trim((string) ($song['album'] ?? ''));
 $songYear = trim((string) ($song['year'] ?? ''));
+$songDate = trim((string) ($song['date'] ?? ''));
 $songLang = trim((string) ($song['lang'] ?? ''));
 $songYoutubeId = music_youtube_video_id((string) ($song['link_ytb'] ?? ''));
 $lyrics = str_replace(['\\r\\n', '\\n', '\\r'], "\n", (string) ($song['lyrics'] ?? ''));
@@ -176,7 +177,11 @@ music_render_header($title, $description, music_cover($song['avatar']));
             <?php foreach ($songGenreTags as $genreTag): ?>
                 <span><a class="genre-tag site-link" href="<?= music_h(music_genre_url($genreTag)) ?>"><?= music_h($genreTag) ?></a></span>
             <?php endforeach; ?>
-            <?php if ($songYear !== ''): ?><span><a class="year-tag site-link" href="<?= music_h(music_song_year_url((int) $songYear)) ?>"><?= music_h($songYear) ?></a></span><?php endif; ?>
+            <?php if ($songYear !== ''): ?>
+                <span>
+                    <a class="year-tag site-link" href="<?= music_h(music_song_year_url((int) $songYear)) ?>"<?= $songDate !== '' ? ' data-tooltip-label="' . music_h($songDate) . '"' : '' ?>><?= music_h($songYear) ?></a>
+                </span>
+            <?php endif; ?>
             <?php if ($songLang !== '' && $songCountryCode !== ''): ?>
                 <span><a class="lang-tag site-link" href="<?= music_h(music_country_url($songCountryCode)) ?>"><?= music_tourism_icon() ?><?= music_h($songCountryName !== '' ? $songCountryName : $songCountryCode) ?></a></span>
             <?php elseif ($songLang !== ''): ?>
@@ -192,9 +197,9 @@ music_render_header($title, $description, music_cover($song['avatar']));
                 <button class="btn btn-primary" onclick="cr_player.add_emp(this)" cr-id="<?= music_h($song['id']) ?>" cr-link="<?= music_h(music_song_url((string) $song['id'], $songLang)) ?>" cr-url="<?= music_h($song['mp3']) ?>" cr-name="<?= music_h($song['name']) ?>" cr-artist="<?= music_h($artistName) ?>" cr-avatar="<?= music_h(music_cover($song['avatar'])) ?>"><i class="fas fa-plus"></i><?= music_h(music_label('music.action.add_to_playlist', 'Thêm vào danh sách phát')) ?></button>
             <?php endif; ?>
             <?php if ($canDownload): ?>
-                <a class="btn" href="<?= music_h($song['mp3']) ?>" download><?= music_h(music_label('music.action.download_mp3', 'Tải MP3')) ?></a>
+                <a class="btn" href="<?= music_h($song['mp3']) ?>" download><?= music_download_icon() ?><?= music_h(music_label('music.action.download_mp3', 'Tải MP3')) ?></a>
             <?php elseif (!empty($song['mp3']) && $paypalConfig['enabled']): ?>
-                <a class="btn song-buy-btn" href="<?= music_h(music_url('paypal-create.php?id=' . rawurlencode($song['id']))) ?>"><?= music_h(music_label('music.action.buy_download', 'Buy MP3 downloads')) ?> · <?= music_h(number_format($price, 2) . ' ' . $paypalConfig['currency']) ?></a>
+                <a class="btn song-buy-btn" href="<?= music_h(music_url('paypal-create.php?id=' . rawurlencode($song['id']))) ?>"><?= music_download_icon() ?><?= music_h(music_label('music.action.buy_download', 'Buy MP3 downloads')) ?> · <?= music_h(number_format($price, 2) . ' ' . $paypalConfig['currency']) ?></a>
             <?php endif; ?>
             <?php if (!empty($song['link_ytb'])): ?>
                 <a class="btn" href="<?= music_h($song['link_ytb']) ?>" target="_blank" rel="noopener noreferrer">
