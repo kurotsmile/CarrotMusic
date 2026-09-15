@@ -150,7 +150,7 @@ music_render_header($genreTitle . ' - ' . music_label('music.genre.role', 'Thể
 ?>
 <article class="detail">
     <aside class="detail-side">
-        <img class="detail-cover" src="<?= music_h($genreAvatar) ?>" alt="<?= music_h($genreTitle) ?>">
+        <img class="detail-cover" src="<?= music_h($genreAvatar) ?>" alt="<?= music_h($genreTitle) ?>" decoding="async" fetchpriority="high">
         <?= music_app_banners() ?>
     </aside>
     <div class="detail-main">
@@ -192,7 +192,7 @@ music_render_header($genreTitle . ' - ' . music_label('music.genre.role', 'Thể
             <?php $songArtist = $song['artist_names'] ?: $song['artist']; ?>
             <?php $songUrl = music_song_url((string) $song['id'], (string) ($song['lang'] ?? '')); ?>
             <article class="song-card">
-                <a class="site-link" href="<?= music_h($songUrl) ?>"><img src="<?= music_h(music_cover($song['avatar'])) ?>" alt="<?= music_h($song['name']) ?>"></a>
+                <a class="site-link" href="<?= music_h($songUrl) ?>"><img src="<?= music_h(music_cover($song['avatar'])) ?>" alt="<?= music_h($song['name']) ?>" loading="lazy" decoding="async"></a>
                 <div class="song-card-body">
                     <a class="song-title site-link" href="<?= music_h($songUrl) ?>"><?= music_h($song['name']) ?></a>
                     <div class="song-meta"><?= music_h($songArtist) ?></div>

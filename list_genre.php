@@ -74,7 +74,7 @@ music_render_header(
             <?php $genreAvatar = trim((string) ($genre['avatar'] ?? '')); ?>
             <a class="genre-card genre-card--list site-link" href="<?= music_h(music_genre_url((string) $genre['genre_id'], (string) ($genre['title'] ?: $genre['genre_id']))) ?>">
                 <?php if ($genreAvatar !== ''): ?>
-                    <img src="<?= music_h(music_cover($genreAvatar)) ?>" alt="<?= music_h($genre['title'] ?: $genre['genre_id']) ?>">
+                    <img src="<?= music_h(music_cover($genreAvatar)) ?>" alt="<?= music_h($genre['title'] ?: $genre['genre_id']) ?>" loading="lazy" decoding="async">
                 <?php else: ?>
                     <span class="genre-card-icon" aria-hidden="true">
                         <svg viewBox="0 0 24 24" focusable="false">

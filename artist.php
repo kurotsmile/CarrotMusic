@@ -91,7 +91,7 @@ music_render_header($title, $description, music_cover($artist['avatar']));
 ?>
 <article class="detail">
     <aside class="detail-side">
-        <img class="detail-cover" src="<?= music_h(music_cover($artist['avatar'])) ?>" alt="<?= music_h($artist['name']) ?>">
+        <img class="detail-cover" src="<?= music_h(music_cover($artist['avatar'])) ?>" alt="<?= music_h($artist['name']) ?>" decoding="async" fetchpriority="high">
         <?= music_app_banners() ?>
     </aside>
     <div class="detail-main">
@@ -134,7 +134,7 @@ music_render_header($title, $description, music_cover($artist['avatar']));
         <?php foreach ($songs as $song): ?>
             <?php $songUrl = music_song_url((string) $song['id'], (string) ($song['lang'] ?? '')); ?>
             <article class="song-card">
-                <a class="site-link" href="<?= music_h($songUrl) ?>"><img src="<?= music_h(music_cover($song['avatar'])) ?>" alt="<?= music_h($song['name']) ?>"></a>
+                <a class="site-link" href="<?= music_h($songUrl) ?>"><img src="<?= music_h(music_cover($song['avatar'])) ?>" alt="<?= music_h($song['name']) ?>" loading="lazy" decoding="async"></a>
                 <div class="song-card-body">
                     <a class="song-title site-link" href="<?= music_h($songUrl) ?>"><?= music_h($song['name']) ?></a>
                     <div class="song-meta"><?= music_h($song['artist_names'] ?: $song['artist']) ?></div>

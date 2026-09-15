@@ -148,7 +148,7 @@ music_render_header($title, $description, music_cover($song['avatar']));
 <article class="detail">
     <aside class="detail-side">
         <figure class="detail-cover detail-cover--motion">
-            <img src="<?= music_h(music_cover($song['avatar'])) ?>" alt="<?= music_h($song['name']) ?>">
+            <img src="<?= music_h(music_cover($song['avatar'])) ?>" alt="<?= music_h($song['name']) ?>" decoding="async" fetchpriority="high">
             <?php if ($songYoutubeId !== ''): ?>
                 <button class="song-video-play" type="button" data-video-open aria-label="<?= music_h(music_label('music.video.play', 'Play Video')) ?>" title="<?= music_h(music_label('music.video.play', 'Play Video')) ?>">
                     <i class="fas fa-video" aria-hidden="true"></i>
@@ -307,7 +307,7 @@ music_render_header($title, $description, music_cover($song['avatar']));
         <?php foreach ($relatedSongs as $related): ?>
             <?php $relatedUrl = music_song_url((string) $related['id'], (string) ($related['lang'] ?? '')); ?>
             <article class="song-card">
-                <a class="site-link" href="<?= music_h($relatedUrl) ?>"><img src="<?= music_h(music_cover($related['avatar'])) ?>" alt="<?= music_h($related['name']) ?>"></a>
+                <a class="site-link" href="<?= music_h($relatedUrl) ?>"><img src="<?= music_h(music_cover($related['avatar'])) ?>" alt="<?= music_h($related['name']) ?>" loading="lazy" decoding="async"></a>
                 <div class="song-card-body">
                     <a class="song-title site-link" href="<?= music_h($relatedUrl) ?>"><?= music_h($related['name']) ?></a>
                     <div class="song-meta"><?= music_h($related['artist_names'] ?: $related['artist']) ?></div>

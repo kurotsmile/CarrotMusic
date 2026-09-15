@@ -84,7 +84,7 @@ music_render_header($pageTitle, sprintf(music_label('music.rank.meta_description
             ?>
             <article class="rank-row">
                 <span class="rank-row-number<?= music_h($rankClass) ?>"><i class="fas <?= music_h($rankIcon) ?>"></i><?= number_format($rankNumber) ?></span>
-                <a class="site-link rank-row-cover" href="<?= music_h($songUrl) ?>"><img src="<?= music_h(music_cover($song['avatar'])) ?>" alt="<?= music_h($song['name']) ?>"></a>
+                <a class="site-link rank-row-cover" href="<?= music_h($songUrl) ?>"><img src="<?= music_h(music_cover($song['avatar'])) ?>" alt="<?= music_h($song['name']) ?>" loading="lazy" decoding="async"></a>
                 <div class="rank-row-main">
                     <a class="song-title site-link" href="<?= music_h($songUrl) ?>"><?= music_h($song['name']) ?></a>
                     <div class="song-meta"><?= music_h($songArtist) ?></div>

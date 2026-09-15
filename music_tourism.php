@@ -134,7 +134,7 @@ foreach ($countries as $country) {
             </div>
             <?php if ($selectedCountryRow): ?>
                 <a class="tourism-selected-country" href="<?= music_h(music_country_url($selectedCountry)) ?>">
-                    <?php if (!empty($selectedCountryRow['icon'])): ?><img src="<?= music_h($selectedCountryRow['icon']) ?>" alt="" loading="lazy"><?php endif; ?>
+                    <?php if (!empty($selectedCountryRow['icon'])): ?><img src="<?= music_h($selectedCountryRow['icon']) ?>" alt="" loading="lazy" decoding="async"><?php endif; ?>
                     <span><?= music_h($selectedCountryRow['name'] ?? $selectedCountry) ?></span>
                 </a>
             <?php endif; ?>
@@ -147,7 +147,7 @@ foreach ($countries as $country) {
         <?php foreach (array_slice($countries, 0, 18) as $country): ?>
             <?php $countryCode = strtoupper((string) ($country['country_code'] ?? '')); ?>
             <a class="tourism-country<?= $countryCode === $selectedCountry ? ' is-active' : '' ?>" href="<?= music_h(music_country_url($countryCode)) ?>">
-                <?php if (!empty($country['icon'])): ?><img src="<?= music_h($country['icon']) ?>" alt="" loading="lazy"><?php endif; ?>
+                <?php if (!empty($country['icon'])): ?><img src="<?= music_h($country['icon']) ?>" alt="" loading="lazy" decoding="async"><?php endif; ?>
                 <span>
                     <strong><?= music_h($country['name'] ?? $countryCode) ?></strong>
                     <small><?= number_format((int) ($country['song_count'] ?? 0)) ?> <?= music_h(music_label('music.label.songs', 'bài hát')) ?> · <?= number_format((int) ($country['artist_count'] ?? 0)) ?> <?= music_h(music_label('music.label.artists', 'nghệ sĩ')) ?></small>
@@ -181,7 +181,7 @@ foreach ($countries as $country) {
                             <?php $songUrl = music_song_url((string) $song['id'], (string) ($song['lang'] ?? '')); ?>
                             <article class="song-card">
                                 <a class="site-link" href="<?= music_h($songUrl) ?>">
-                                    <img src="<?= music_h(music_cover($song['avatar'])) ?>" alt="<?= music_h($song['name']) ?>">
+                                    <img src="<?= music_h(music_cover($song['avatar'])) ?>" alt="<?= music_h($song['name']) ?>" loading="lazy" decoding="async">
                                 </a>
                                 <div class="song-card-body">
                                     <a class="song-title site-link" href="<?= music_h($songUrl) ?>"><?= music_h($song['name']) ?></a>
@@ -204,7 +204,7 @@ foreach ($countries as $country) {
 	                    <div class="artist-grid">
 	                        <?php foreach ($artists as $artist): ?>
 	                            <a class="artist-card site-link" href="<?= music_h(music_artist_url((int) $artist['id'], (string) $artist['name'])) ?>">
-	                                <img src="<?= music_h(music_cover($artist['avatar'] ?? '')) ?>" alt="<?= music_h($artist['name']) ?>">
+	                                <img src="<?= music_h(music_cover($artist['avatar'] ?? '')) ?>" alt="<?= music_h($artist['name']) ?>" loading="lazy" decoding="async">
 	                                <span><strong><?= music_h($artist['name']) ?></strong><small><?= number_format((int) ($artist['song_count'] ?? 0)) ?> <?= music_h(music_label('music.label.songs', 'bài hát')) ?></small></span>
 	                            </a>
 	                        <?php endforeach; ?>
@@ -234,7 +234,7 @@ foreach ($countries as $country) {
                         ?>
                         <article class="song-card">
                             <a class="site-link song-card-cover" href="<?= music_h($songUrl) ?>">
-                                <img src="<?= music_h(music_cover($song['avatar'])) ?>" alt="<?= music_h($song['name']) ?>">
+                                <img src="<?= music_h(music_cover($song['avatar'])) ?>" alt="<?= music_h($song['name']) ?>" loading="lazy" decoding="async">
                                 <span class="song-rank-badge<?= $rankClass ?>" aria-label="<?= music_h(sprintf(music_label('aria.song_rank', 'Rank %s'), (string) $songRank)) ?>">
                                     <?php if ($rankIcon !== ''): ?><i class="fas <?= music_h($rankIcon) ?>" aria-hidden="true"></i><?php endif; ?>
                                     <span>#<?= number_format($songRank) ?></span>

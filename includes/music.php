@@ -333,7 +333,7 @@ function music_audio_proxy_url(string $url): string
 function music_app_banners(): string
 {
     return '<a class="music-app-banner" href="https://carrot28.com/Music-for-life" target="_blank" rel="noopener noreferrer">'
-        . '<img src="' . music_h(music_url('images/bn_app.png')) . '" alt="">'
+        . '<img src="' . music_h(music_url('images/bn_app.webp')) . '" alt="" loading="lazy" decoding="async" width="800" height="320">'
         . '<span>'
         . '<small>' . music_h(music_label('music.app_banner.eyebrow', 'Nghe nhạc mọi thiết bị')) . '</small>'
         . '<strong>Heartbeat Music</strong>'
@@ -341,7 +341,7 @@ function music_app_banners(): string
         . '</span>'
         . '</a>'
         . '<a class="music-app-banner music-app-banner--android" href="https://play.google.com/store/apps/details?id=com.carrotstore.heartbeatmusic" target="_blank" rel="noopener noreferrer">'
-        . '<img src="' . music_h(music_url('favicon/android-chrome-192x192.png')) . '" alt="">'
+        . '<img src="' . music_h(music_url('favicon/android-chrome-192x192.png')) . '" alt="" loading="lazy" decoding="async" width="192" height="192">'
         . '<span>'
         . '<small>' . music_h(music_label('music.android_banner.eyebrow', 'Tải ứng dụng Android')) . '</small>'
         . '<strong>Heart Beat Play</strong>'
@@ -895,7 +895,7 @@ function music_render_header(string $title, string $description = '', string $im
                     ?>
                     <a class="music-profile-button js-music-profile-popover" href="<?= music_h(music_url('profile.php')) ?>" aria-label="<?= music_h(music_label('nav.profile', 'Profile')) ?>">
                         <?php if ($musicUserAvatar !== ''): ?>
-                            <img src="<?= music_h($musicUserAvatar) ?>" alt="">
+                            <img src="<?= music_h($musicUserAvatar) ?>" alt="" decoding="async">
                         <?php else: ?>
                             <span><?= music_h($musicUserInitial) ?></span>
                         <?php endif; ?>
@@ -936,7 +936,7 @@ function music_render_footer(): void
 <footer class="site-footer">
     <div class="footer-brand">
         <a href="https://home.carrot28.com" target="_blank">
-        <img src="<?= music_h(music_url('carrot_28.png')) ?>" alt="Carrot28">
+        <img src="<?= music_h(music_url('carrot_28.png')) ?>" alt="Carrot28" loading="lazy" decoding="async">
         </a>
         <div>
             <strong>Carrot28</strong>
@@ -971,7 +971,7 @@ function music_render_footer(): void
                     ?>
                     <a class="footer-site-link" href="<?= music_h($siteUrl) ?>" target="_blank" rel="noopener noreferrer">
                         <?php if ($siteLogo !== ''): ?>
-                            <img src="<?= music_h($siteLogo) ?>" alt="" loading="lazy">
+                            <img src="<?= music_h($siteLogo) ?>" alt="" loading="lazy" decoding="async">
                         <?php else: ?>
                             <span class="footer-site-icon"><i class="fas fa-globe"></i></span>
                         <?php endif; ?>

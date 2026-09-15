@@ -154,7 +154,7 @@ music_render_header($artistListTitle, $artistListDescription);
                     ?>
                     <a class="<?= $countryCode === $selectedCountry ? 'is-active' : '' ?>" href="<?= music_h(music_artists_country_url($countryCode)) ?>">
                         <?php if (!empty($country['icon'])): ?>
-                            <img src="<?= music_h($country['icon']) ?>" alt="" loading="lazy">
+                            <img src="<?= music_h($country['icon']) ?>" alt="" loading="lazy" decoding="async">
                         <?php else: ?>
                             <span class="artist-country-icon"><?= music_h($countryCode) ?></span>
                         <?php endif; ?>
@@ -175,7 +175,7 @@ music_render_header($artistListTitle, $artistListDescription);
     <div class="artist-grid">
         <?php foreach ($artists as $artist): ?>
             <a class="artist-card site-link" href="<?= music_h(music_artist_url((int) $artist['id'], (string) $artist['name'])) ?>">
-                <img src="<?= music_h(music_cover($artist['avatar'])) ?>" alt="<?= music_h($artist['name']) ?>">
+                <img src="<?= music_h(music_cover($artist['avatar'])) ?>" alt="<?= music_h($artist['name']) ?>" loading="lazy" decoding="async">
                 <span><strong><?= music_h($artist['name']) ?></strong><span><?= number_format((int) $artist['song_count']) ?> <?= music_h(music_label('music.label.songs', 'bài hát')) ?></span></span>
             </a>
         <?php endforeach; ?>

@@ -10,10 +10,8 @@ if ($pageSlug !== '') {
 music_redirect_to_canonical(music_home_url(), []);
 
 $songs = [];
-$popularSongs = [];
 $monthlyRankSongs = [];
 $localSongs = [];
-$localPopularSongs = [];
 $genres = [];
 $artists = [];
 $timelineYears = [];
@@ -29,16 +27,14 @@ if ($pdo instanceof PDO) {
         $cacheKey = music_cache_key('music_home', [
             'lang' => current_lang_key(),
             'q' => $searchQuery !== '' ? sha1($searchQuery) : '',
-            'view' => 'genre_cards_timeline_v8_local_first',
+            'view' => 'genre_cards_timeline_v9_rank_only_lazy_images',
         ]);
         $cachedHome = music_cache_get($cacheKey, $cacheTtl);
 
         if (is_array($cachedHome)) {
             $songs = is_array($cachedHome['songs'] ?? null) ? $cachedHome['songs'] : [];
-            $popularSongs = is_array($cachedHome['popular_songs'] ?? null) ? $cachedHome['popular_songs'] : [];
             $monthlyRankSongs = is_array($cachedHome['monthly_rank_songs'] ?? null) ? $cachedHome['monthly_rank_songs'] : [];
             $localSongs = is_array($cachedHome['local_songs'] ?? null) ? $cachedHome['local_songs'] : [];
-            $localPopularSongs = is_array($cachedHome['local_popular_songs'] ?? null) ? $cachedHome['local_popular_songs'] : [];
             $stats = is_array($cachedHome['stats'] ?? null) ? array_merge($stats, $cachedHome['stats']) : $stats;
             $genres = is_array($cachedHome['genres'] ?? null) ? $cachedHome['genres'] : [];
             $artists = is_array($cachedHome['artists'] ?? null) ? $cachedHome['artists'] : [];
@@ -60,13 +56,9 @@ if ($pdo instanceof PDO) {
                 $songs = music_fetch_songs($pdo, $musicBoxLimit);
                 $localSongs = music_fetch_songs($pdo, $musicBoxLimit, 'TRIM(COALESCE(s.lang, "")) = ?', [$localLang]);
                 try {
-                    $popularSongs = music_fetch_popular_songs($pdo, $musicBoxLimit);
-                    $localPopularSongs = music_fetch_popular_songs($pdo, $musicBoxLimit, 'TRIM(COALESCE(s.lang, "")) = ?', [$localLang]);
                     $monthlyRankSongs = music_fetch_monthly_rank_songs($pdo, date('Y-m'), 14, 0, $localLang);
                 } catch (Throwable $popularError) {
-                    error_log('music_fetch_popular_songs failed: ' . $popularError->getMessage());
-                    $popularSongs = [];
-                    $localPopularSongs = [];
+                    error_log('music_fetch_monthly_rank_songs failed: ' . $popularError->getMessage());
                     $monthlyRankSongs = [];
                 }
             }
@@ -154,10 +146,8 @@ if ($pdo instanceof PDO) {
             music_cache_set($cacheKey, [
                 'created_at' => date('c'),
                 'songs' => $songs,
-                'popular_songs' => $popularSongs,
                 'monthly_rank_songs' => $monthlyRankSongs,
                 'local_songs' => $localSongs,
-                'local_popular_songs' => $localPopularSongs,
                 'stats' => $stats,
                 'genres' => $genres,
                 'artists' => $artists,
@@ -181,25 +171,25 @@ $heroSlides = [
     [
         'title' => music_label('music.all_artists', 'Nghệ sĩ ' . music_brand_name()),
         'description' => music_label('music.hero.slide_artists_desc', 'Khám phá hồ sơ nghệ sĩ, các bài hát nổi bật và danh sách phát được cập nhật liên tục.'),
-        'image' => music_url('images/bn_artist.png'),
+        'image' => music_url('images/bn_artist.webp'),
         'url' => music_artists_url(),
     ],
     [
         'title' => music_label('music.all_genres', 'Thế giới thể loại'),
         'description' => music_label('music.hero.slide_genres_desc', 'Đi sâu vào từng màu sắc âm nhạc, từ pop đại chúng đến những mood nghe riêng biệt.'),
-        'image' => music_url('images/bn_genre.png'),
+        'image' => music_url('images/bn_genre.webp'),
         'url' => music_genres_url(),
     ],
     [
         'title' => music_label('music.timeline', 'Hoài niệm dòng thời gian'),
         'description' => music_label('music.hero.slide_time_desc', 'Nghe nhạc theo mốc năm và tìm lại cảm giác của từng giai đoạn trong ký ức.'),
-        'image' => music_url('images/bn_time.png'),
+        'image' => music_url('images/bn_time.webp'),
         'url' => music_home_url('genres'),
     ],
     [
         'title' => music_label('music.hero.slide_app_title', 'Heartbeat Music'),
         'description' => music_label('music.hero.slide_app_desc', 'Ứng dụng nghe nhạc dành cho những playlist cá nhân, nhẹ nhàng và luôn sẵn sàng phát.'),
-        'image' => music_url('images/bn_app.png'),
+        'image' => music_url('images/bn_app.webp'),
         'url' => 'https://carrot28.com/Music-for-life',
     ],
 ];
@@ -224,7 +214,7 @@ $renderSongGrid = static function (array $items, string $emptyLabel, bool $ranke
             <?php $songUrl = music_song_url((string) $song['id'], (string) ($song['lang'] ?? '')); ?>
             <article class="song-card">
                 <a class="site-link song-card-cover" href="<?= music_h($songUrl) ?>">
-                    <img src="<?= music_h(music_cover($song['avatar'])) ?>" alt="<?= music_h($song['name']) ?>">
+                    <img src="<?= music_h(music_cover($song['avatar'])) ?>" alt="<?= music_h($song['name']) ?>" loading="lazy" decoding="async">
                     <?php if ($ranked && $songRank <= 10): ?>
                         <?php
                         $rankClass = $songRank <= 3 ? ' is-top-' . $songRank : '';
@@ -280,7 +270,7 @@ $renderSongGrid = static function (array $items, string $emptyLabel, bool $ranke
         <div class="hero-slider-track">
             <?php foreach ($heroSlides as $slideIndex => $slide): ?>
                 <article class="hero-slide <?= $slideIndex === 0 ? 'is-active' : '' ?>" data-slide="<?= $slideIndex ?>">
-                    <img src="<?= music_h($slide['image']) ?>" alt="<?= music_h($slide['title']) ?>">
+                    <img src="<?= music_h($slide['image']) ?>" alt="<?= music_h($slide['title']) ?>" width="800" height="320" decoding="async" <?= $slideIndex === 0 ? 'fetchpriority="high"' : 'loading="lazy"' ?>>
                     <div class="hero-slide-copy">
                         <strong><?= music_h($slide['title']) ?></strong>
                         <p><?= music_h($slide['description']) ?></p>
@@ -324,20 +314,6 @@ $renderSongGrid = static function (array $items, string $emptyLabel, bool $ranke
     <?php endif; ?>
 </section>
 
-<?php if ($searchQuery === '' && ($popularSongs || $localPopularSongs)): ?>
-<section class="section" data-music-mode-section="popular_songs">
-    <div class="section-head">
-        <div>
-            <h2><?= music_h(music_label('music.section.popular_songs', 'Nghe nhiều nhất')) ?></h2>
-            <p><?= music_h(music_label('music.section.popular_songs_intro', 'Những giai điệu đang được nhiều người chọn nghe gần đây.')) ?></p>
-        </div>
-        <?php $renderMusicModeSwitch('popular_songs', $localPopularSongs ? 'local' : 'world'); ?>
-    </div>
-    <div data-music-mode-panel="world" <?= $localPopularSongs ? 'hidden' : '' ?>><?php $renderSongGrid($popularSongs, music_label('music.empty.no_popular_songs', 'Chưa có dữ liệu nghe nhiều nhất.'), true); ?></div>
-    <div data-music-mode-panel="local" <?= $localPopularSongs ? '' : 'hidden' ?>><?php $renderSongGrid($localPopularSongs, music_label('music.empty.no_local_popular_songs', 'Chưa có dữ liệu nghe nhiều nhất tại địa phương.'), true); ?></div>
-</section>
-<?php endif; ?>
-
 <?php if ($searchQuery === '' && $monthlyRankSongs): ?>
 <section class="section" data-music-mode-section="monthly_rank">
     <div class="section-head">
@@ -361,7 +337,7 @@ $renderSongGrid = static function (array $items, string $emptyLabel, bool $ranke
             <?php $genreAvatar = trim((string) ($genre['avatar'] ?? '')); ?>
             <a class="genre-card site-link" href="<?= music_h(music_genre_url((string) $genre['genre_id'], (string) ($genre['title'] ?: $genre['genre_id']))) ?>">
                 <?php if ($genreAvatar !== ''): ?>
-                    <img src="<?= music_h(music_cover($genreAvatar)) ?>" alt="<?= music_h($genre['title'] ?: $genre['genre_id']) ?>">
+                    <img src="<?= music_h(music_cover($genreAvatar)) ?>" alt="<?= music_h($genre['title'] ?: $genre['genre_id']) ?>" loading="lazy" decoding="async">
                 <?php else: ?>
                     <span class="genre-card-icon" aria-hidden="true">
                         <svg viewBox="0 0 24 24" focusable="false">
@@ -389,7 +365,7 @@ $renderSongGrid = static function (array $items, string $emptyLabel, bool $ranke
     <div class="artist-grid">
         <?php foreach ($artists as $artist): ?>
             <a class="artist-card site-link" href="<?= music_h(music_artist_url((int) $artist['id'], (string) $artist['name'])) ?>">
-                <img src="<?= music_h(music_cover($artist['avatar'])) ?>" alt="<?= music_h($artist['name']) ?>">
+                <img src="<?= music_h(music_cover($artist['avatar'])) ?>" alt="<?= music_h($artist['name']) ?>" loading="lazy" decoding="async">
                 <span><strong><?= music_h($artist['name']) ?></strong><span><?= number_format((int) $artist['song_count']) ?> <?= music_h(music_label('music.label.songs', 'bài hát')) ?></span></span>
             </a>
         <?php endforeach; ?>
