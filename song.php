@@ -175,7 +175,7 @@ music_render_header($title, $description, music_cover($song['avatar']));
                 <span class="album-tag"><i class="fas fa-compact-disc" aria-hidden="true"></i><?= music_h($songAlbum) ?></span>
             <?php endif; ?>
             <?php foreach ($songGenreTags as $genreTag): ?>
-                <span><a class="genre-tag site-link" href="<?= music_h(music_genre_url($genreTag)) ?>"><?= music_h($genreTag) ?></a></span>
+                <span><a class="genre-tag site-link" href="<?= music_h(music_genre_url($genreTag)) ?>"><i class="fas fa-tags" aria-hidden="true"></i><?= music_h($genreTag) ?></a></span>
             <?php endforeach; ?>
             <?php if ($songYear !== ''): ?>
                 <span>

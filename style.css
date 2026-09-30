@@ -273,6 +273,7 @@ mark{display:inline;padding:.08em .34em;border-radius:6px;background:linear-grad
 .detail-meta .view-meta{display:inline-flex;align-items:center;gap:6px;color:#8a1f11}
 .detail-meta .view-meta svg{flex:0 0 auto;color:var(--accent)}
 .detail-meta .artist-tag,.detail-meta .genre-tag,.detail-meta .year-tag,.detail-meta .lang-tag{color:#8a1f11}
+.detail-meta .genre-tag{display:inline-flex;align-items:center;gap:6px}
 .detail-meta .album-tag{display:inline-flex;align-items:center;gap:6px;color:#8a1f11;background:linear-gradient(135deg,#fff7f2,#fff0e6 58%,#ffd0a8);border-color:#ffc3a5}
 .detail-meta .lang-tag{display:inline-flex;align-items:center;gap:6px}
 .detail-meta .lang-tag .tourism-icon{flex:0 0 auto;color:var(--accent)}
