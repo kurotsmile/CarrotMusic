@@ -1,6 +1,8 @@
 <?php
 require_once __DIR__ . '/includes/music.php';
 
+music_start_session();
+
 $songId = trim((string) ($_GET['id'] ?? ''));
 $paypalConfig = music_paypal_config($pdo ?? null, 'music');
 

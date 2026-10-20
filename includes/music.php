@@ -6,11 +6,24 @@ if (!defined('CARROT_SITE_ALIASES')) {
     define('CARROT_SITE_ALIASES', ['CarrotMusic', 'Music', 'Heart Beat Play', 'HeartbeatPlay', 'heartbeatplay.com', 'music.carrot28.com']);
 }
 require_once __DIR__ . '/../../CarrotHome/config/database.php';
+// Public music pages must not create a PHP session for a first-time visitor:
+// Cloudflare can then cache their HTML safely.  A session is still resumed when
+// the browser already has one (for example, after login or a purchase).
+if (!defined('CARROT_SKIP_AUTO_SESSION')) {
+    define('CARROT_SKIP_AUTO_SESSION', true);
+}
 require_once __DIR__ . '/../../CarrotHome/includes/functions.php';
 require_once __DIR__ . '/visit_tracker.php';
 
-if (session_status() !== PHP_SESSION_ACTIVE) {
+if (session_status() === PHP_SESSION_NONE && !empty($_COOKIE[session_name()])) {
     session_start();
+}
+
+function music_start_session(): void
+{
+    if (session_status() !== PHP_SESSION_ACTIVE) {
+        session_start();
+    }
 }
 
 function music_apply_language_from_request(?PDO $pdo): void
@@ -20,7 +33,7 @@ function music_apply_language_from_request(?PDO $pdo): void
         return;
     }
 
-    if ($pdo instanceof PDO) {
+    if (session_status() === PHP_SESSION_ACTIVE && $pdo instanceof PDO) {
         try {
             $stmt = $pdo->prepare('SELECT id, lang_key, lang_country FROM country WHERE lang_key = ? ORDER BY id ASC LIMIT 1');
             $stmt->execute([$requestedLang]);
@@ -36,7 +49,9 @@ function music_apply_language_from_request(?PDO $pdo): void
         }
     }
 
-    $_SESSION['key_lang'] = $requestedLang;
+    if (session_status() === PHP_SESSION_ACTIVE) {
+        $_SESSION['key_lang'] = $requestedLang;
+    }
 }
 
 music_apply_language_from_request($pdo ?? null);
@@ -569,7 +584,8 @@ function music_song_price(array $song, array $paypalConfig): float
 function music_fetch_songs(PDO $pdo, int $limit = 24, string $where = '', array $params = []): array
 {
     $sql = '
-        SELECT s.*, GROUP_CONCAT(DISTINCT sa.name ORDER BY sa.name SEPARATOR ", ") AS artist_names
+        SELECT s.*, GROUP_CONCAT(DISTINCT sa.name ORDER BY sa.name SEPARATOR ", ") AS artist_names,
+               GROUP_CONCAT(DISTINCT sa.id ORDER BY sa.name SEPARATOR ",") AS artist_ids
         FROM song s
         LEFT JOIN song_artist_map sam ON sam.song_id = s.id
         LEFT JOIN song_artist sa ON sa.id = sam.artist_id
@@ -588,7 +604,8 @@ function music_fetch_popular_songs(PDO $pdo, int $limit = 14, string $where = ''
 {
     $sql = '
         SELECT s.*, popular.view_count,
-               GROUP_CONCAT(DISTINCT sa.name ORDER BY sa.name SEPARATOR ", ") AS artist_names
+               GROUP_CONCAT(DISTINCT sa.name ORDER BY sa.name SEPARATOR ", ") AS artist_names,
+               GROUP_CONCAT(DISTINCT sa.id ORDER BY sa.name SEPARATOR ",") AS artist_ids
         FROM (
             SELECT song_id, COUNT(*) AS view_count, MAX(last_seen_at) AS last_viewed_at
             FROM song_view
@@ -621,7 +638,8 @@ function music_fetch_monthly_rank_songs(PDO $pdo, string $month, int $limit = 14
     $langKey = trim($langKey);
     $sql = '
         SELECT s.*, ranked.view_count, ranked.last_viewed_at,
-               GROUP_CONCAT(DISTINCT sa.name ORDER BY sa.name SEPARATOR ", ") AS artist_names
+               GROUP_CONCAT(DISTINCT sa.name ORDER BY sa.name SEPARATOR ", ") AS artist_names,
+               GROUP_CONCAT(DISTINCT sa.id ORDER BY sa.name SEPARATOR ",") AS artist_ids
         FROM (
             SELECT song_id, SUM(hits) AS view_count, MAX(last_seen_at) AS last_viewed_at
             FROM song_view
@@ -797,6 +815,11 @@ function music_has_paid_song(string $songId): bool
 
 function music_render_header(string $title, string $description = '', string $image = ''): void
 {
+    if (session_status() === PHP_SESSION_NONE && empty($_COOKIE[session_name()])) {
+        header('Cache-Control: public, max-age=60, s-maxage=600, stale-while-revalidate=60');
+    } else {
+        header('Cache-Control: private, no-store');
+    }
     $description = $description !== '' ? $description : music_label('music.meta.description', music_brand_name() . ' là nơi bạn tìm, nghe và lưu lại những bài hát hợp tâm trạng mỗi ngày.');
     $image = $image !== '' ? $image : music_url('favicon/android-chrome-512x512.png');
     $searchQuery = trim((string) ($_GET['q'] ?? ''));

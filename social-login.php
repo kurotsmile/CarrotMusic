@@ -1,6 +1,8 @@
 <?php
 require_once __DIR__ . '/includes/music.php';
 
+music_start_session();
+
 function music_social_login_base_url(): string
 {
     $forwardedProto = strtolower(trim((string) ($_SERVER['HTTP_X_FORWARDED_PROTO'] ?? '')));

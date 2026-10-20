@@ -1,18 +1,20 @@
 <?php
 require_once __DIR__ . '/includes/music.php';
 
+music_start_session();
+
 header('Content-Type: application/json; charset=utf-8');
 
 $userId = (int) ($_SESSION['home_user_id'] ?? 0);
 if (!$pdo instanceof PDO) {
     http_response_code(500);
-    echo json_encode(['ok' => false, 'message' => $db_error ?? music_label('error.mysql_connection', 'Lỗi kết nối MySQL.')], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+    echo json_encode(['ok' => false, 'message' => $db_error ?? music_label('error.mysql_connection', 'MySQL connection error.')], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
     exit;
 }
 
 if ($userId <= 0) {
     http_response_code(401);
-    echo json_encode(['ok' => false, 'message' => music_label('login.required', 'Vui lòng đăng nhập.')], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+    echo json_encode(['ok' => false, 'message' => music_label('login.required', 'Please sign in.')], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
     exit;
 }
 
@@ -42,7 +44,7 @@ try {
         $name = trim((string) ($_POST['name'] ?? ''));
         $description = trim((string) ($_POST['description'] ?? ''));
         if ($name === '') {
-            throw new RuntimeException(music_label('playlist.error_name', 'Vui lòng nhập tên playlist.'));
+            throw new RuntimeException(music_label('playlist.error_name', 'Please enter a playlist name.'));
         }
         $stmt = $pdo->prepare('INSERT INTO music_playlist (user_id, name, description, songs_json) VALUES (?, ?, ?, ?)');
         $stmt->execute([$userId, $name, $description, '[]']);
@@ -55,7 +57,7 @@ try {
         $name = trim((string) ($_POST['name'] ?? ''));
         $description = trim((string) ($_POST['description'] ?? ''));
         if ($playlistId <= 0 || $name === '') {
-            throw new RuntimeException(music_label('playlist.error_update', 'Thông tin playlist không hợp lệ.'));
+            throw new RuntimeException(music_label('playlist.error_update', 'Playlist information is not valid.'));
         }
         $stmt = $pdo->prepare('UPDATE music_playlist SET name = ?, description = ? WHERE id = ? AND user_id = ?');
         $stmt->execute([$name, $description, $playlistId, $userId]);
@@ -82,14 +84,14 @@ try {
             'added_at' => date('c'),
         ];
         if ($playlistId <= 0 || $song['name'] === '' || $song['mp3'] === '') {
-            throw new RuntimeException(music_label('playlist.error_song', 'Không thể lưu bài hát này vào playlist.'));
+            throw new RuntimeException(music_label('playlist.error_song', 'Could not save this song to the playlist.'));
         }
 
         $stmt = $pdo->prepare('SELECT songs_json FROM music_playlist WHERE id = ? AND user_id = ? LIMIT 1');
         $stmt->execute([$playlistId, $userId]);
         $row = $stmt->fetch(PDO::FETCH_ASSOC);
         if (!$row) {
-            throw new RuntimeException(music_label('playlist.not_found', 'Không tìm thấy playlist.'));
+            throw new RuntimeException(music_label('playlist.not_found', 'Playlist not found.'));
         }
 
         $songs = json_decode((string) ($row['songs_json'] ?? '[]'), true);
@@ -98,7 +100,7 @@ try {
         foreach ($songs as $item) {
             $itemFingerprint = trim((string) ($item['id'] ?? '')) !== '' ? 'id:' . trim((string) $item['id']) : 'mp3:' . trim((string) ($item['mp3'] ?? ''));
             if ($itemFingerprint === $fingerprint) {
-                echo json_encode(['ok' => true, 'message' => music_label('playlist.song_exists', 'Bài hát đã có trong playlist.')], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+                echo json_encode(['ok' => true, 'message' => music_label('playlist.song_exists', 'Song is already in the playlist.')], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
                 exit;
             }
         }
@@ -106,11 +108,11 @@ try {
         $songs[] = $song;
         $stmt = $pdo->prepare('UPDATE music_playlist SET songs_json = ? WHERE id = ? AND user_id = ?');
         $stmt->execute([json_encode($songs, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES), $playlistId, $userId]);
-        echo json_encode(['ok' => true, 'message' => music_label('playlist.song_saved', 'Đã lưu bài hát vào playlist.')], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+        echo json_encode(['ok' => true, 'message' => music_label('playlist.song_saved', 'Song saved to playlist.')], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
         exit;
     }
 
-    throw new RuntimeException(music_label('playlist.error_action', 'Tác vụ playlist không hợp lệ.'));
+    throw new RuntimeException(music_label('playlist.error_action', 'Playlist action is not valid.'));
 } catch (Throwable $e) {
     http_response_code(400);
     echo json_encode(['ok' => false, 'message' => $e->getMessage()], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);

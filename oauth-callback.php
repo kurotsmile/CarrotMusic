@@ -1,6 +1,8 @@
 <?php
 require_once __DIR__ . '/includes/music.php';
 
+music_start_session();
+
 function music_oauth_json(array $payload, int $statusCode = 200): void
 {
     http_response_code($statusCode);
