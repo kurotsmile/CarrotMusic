@@ -33,6 +33,11 @@ function music_apply_language_from_request(?PDO $pdo): void
         return;
     }
 
+    // Public pages normally avoid creating a session so they can be cached.
+    // A language chosen explicitly by the visitor is an exception: persist it
+    // before navigation removes the `lang` query parameter (for example, Home).
+    music_start_session();
+
     if (session_status() === PHP_SESSION_ACTIVE && $pdo instanceof PDO) {
         try {
             $stmt = $pdo->prepare('SELECT id, lang_key, lang_country FROM country WHERE lang_key = ? ORDER BY id ASC LIMIT 1');
