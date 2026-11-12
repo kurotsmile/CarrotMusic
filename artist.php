@@ -109,9 +109,14 @@ music_render_header($title, $description, music_cover($artist['avatar']));
             <?= music_detail_action_buttons((string) $artist['name'], music_artist_url((int) $artist['id'], (string) $artist['name'])) ?>
         </div>
         <?php if (!empty($artist['description'])): ?>
-            <div class="lyrics">
-                <?= $artist['description']; ?>
-                <!--nl2br(music_h($artist['description']))-->
+            <div class="lyrics song-lyrics-shell is-collapsed" data-artist-description>
+                <div class="song-lyrics-content" data-artist-description-content>
+                    <?= $artist['description']; ?>
+                </div>
+                <button class="song-lyrics-toggle" type="button" data-artist-description-toggle aria-expanded="false">
+                    <span><?= music_h(music_label('music.artist.description_show_more', 'Xem thêm giới thiệu')) ?></span>
+                    <i class="fas fa-chevron-down" aria-hidden="true"></i>
+                </button>
             </div>
         <?php endif; ?>
     </div>
@@ -148,6 +153,34 @@ music_render_header($title, $description, music_cover($artist['avatar']));
     </div>
     <?php if (!$songs): ?><div class="empty"><?= music_h(music_label('music.artist.no_songs', 'Nghệ sĩ này chưa có bài hát được liên kết.')) ?></div><?php endif; ?>
 </section>
+
+<?php if (!empty($artist['description'])): ?>
+<script>
+(() => {
+    const shell = document.querySelector('[data-artist-description]');
+    const content = shell?.querySelector('[data-artist-description-content]');
+    const toggle = shell?.querySelector('[data-artist-description-toggle]');
+    if (!shell || !content || !toggle) return;
+
+    const collapsedHeight = parseFloat(getComputedStyle(content).getPropertyValue('--lyrics-collapsed-height')) || 260;
+    if (content.scrollHeight <= collapsedHeight + 12) {
+        shell.classList.remove('is-collapsed');
+        shell.classList.add('is-short');
+        toggle.hidden = true;
+        return;
+    }
+
+    toggle.addEventListener('click', () => {
+        const isExpanded = shell.classList.toggle('is-expanded');
+        shell.classList.toggle('is-collapsed', !isExpanded);
+        toggle.setAttribute('aria-expanded', isExpanded ? 'true' : 'false');
+        toggle.querySelector('span').textContent = isExpanded
+            ? <?= json_encode(music_label('music.artist.description_show_less', 'Thu gọn giới thiệu'), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>
+            : <?= json_encode(music_label('music.artist.description_show_more', 'Xem thêm giới thiệu'), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>;
+    });
+})();
+</script>
+<?php endif; ?>
 
 <script>
 document.querySelector('.js-add-artist-songs')?.addEventListener('click', async () => {
