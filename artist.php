@@ -114,7 +114,7 @@ music_render_header($title, $description, music_cover($artist['avatar']));
                     <?= $artist['description']; ?>
                 </div>
                 <button class="song-lyrics-toggle" type="button" data-artist-description-toggle aria-expanded="false">
-                    <span><?= music_h(music_label('music.artist.description_show_more', 'Xem thêm giới thiệu')) ?></span>
+                    <span><?= music_h(music_label('music.description_show_more', 'Xem thêm giới thiệu')) ?></span>
                     <i class="fas fa-chevron-down" aria-hidden="true"></i>
                 </button>
             </div>
@@ -175,8 +175,8 @@ music_render_header($title, $description, music_cover($artist['avatar']));
         shell.classList.toggle('is-collapsed', !isExpanded);
         toggle.setAttribute('aria-expanded', isExpanded ? 'true' : 'false');
         toggle.querySelector('span').textContent = isExpanded
-            ? <?= json_encode(music_label('music.artist.description_show_less', 'Thu gọn giới thiệu'), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>
-            : <?= json_encode(music_label('music.artist.description_show_more', 'Xem thêm giới thiệu'), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>;
+            ? <?= json_encode(music_label('music.description_show_less', 'Thu gọn giới thiệu'), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>
+            : <?= json_encode(music_label('music.description_show_more', 'Xem thêm giới thiệu'), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>;
     });
 })();
 </script>
