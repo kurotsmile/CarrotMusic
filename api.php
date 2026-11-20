@@ -53,6 +53,7 @@ function music_api_song(array $song): array
         'name' => (string) ($song['name'] ?? ''),
         'artist' => (string) (($song['artist_names'] ?? '') ?: ($song['artist'] ?? '')),
         'artist_id' => (string) ($artistIds[0] ?? ''),
+        'artist_ids' => implode(',', $artistIds),
         'album' => (string) ($song['album'] ?? ''),
         'genre' => (string) ($song['genre'] ?? ''),
         'year' => (string) ($song['year'] ?? ''),
