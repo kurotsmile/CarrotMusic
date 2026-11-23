@@ -402,6 +402,29 @@ try {
         music_api_json(['ok' => true, 'songs' => array_map('music_api_song', $songs)]);
     }
 
+    if ($action === 'random') {
+        header('Cache-Control: no-store, max-age=0');
+        $where = 'WHERE TRIM(COALESCE(s.mp3, "")) <> ""';
+        $params = [];
+        if ($lang !== '') {
+            $where .= ' AND TRIM(COALESCE(s.lang, "")) = ?';
+            $params[] = $lang;
+        }
+        $stmt = $pdo->prepare('
+            SELECT s.*, GROUP_CONCAT(DISTINCT sa.name ORDER BY sa.name SEPARATOR ", ") AS artist_names,
+                   GROUP_CONCAT(DISTINCT sa.id ORDER BY sa.name SEPARATOR ",") AS artist_ids
+            FROM song s
+            LEFT JOIN song_artist_map sam ON sam.song_id = s.id
+            LEFT JOIN song_artist sa ON sa.id = sam.artist_id
+            ' . $where . '
+            GROUP BY s.id
+            ORDER BY RAND()
+            LIMIT ' . $limit . '
+        ');
+        $stmt->execute($params);
+        music_api_json(['ok' => true, 'songs' => array_map('music_api_song', $stmt->fetchAll())]);
+    }
+
     if ($action === 'rank') {
         $month = trim((string) ($_GET['month'] ?? date('Y-m')));
         $songs = music_fetch_monthly_rank_songs($pdo, $month, $limit, 0, $lang);
