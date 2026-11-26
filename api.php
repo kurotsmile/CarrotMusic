@@ -110,6 +110,7 @@ $action = strtolower(trim((string) ($_POST['action'] ?? $_GET['action'] ?? 'home
 $limit = max(1, min(60, (int) ($_GET['limit'] ?? 28)));
 $query = trim((string) ($_GET['q'] ?? ''));
 $lang = strtolower(trim((string) ($_GET['lang'] ?? current_lang_key())));
+$random = (int) ($_GET['random'] ?? 0) === 1;
 
 if (!$pdo instanceof PDO) {
     music_api_json(['ok' => false, 'error' => $db_error ?? 'Database unavailable'], 503);
@@ -207,6 +208,9 @@ try {
     }
 
     if ($action === 'artists') {
+        if ($random) {
+            header('Cache-Control: no-store, max-age=0');
+        }
         $where = '';
         $params = [];
         if ($lang !== '') {
@@ -219,7 +223,7 @@ try {
             LEFT JOIN song_artist_map sam ON sam.artist_id = sa.id
             ' . $where . '
             GROUP BY sa.id
-            ORDER BY song_count DESC, sa.name ASC, sa.id ASC
+            ORDER BY ' . ($random ? 'RAND()' : 'song_count DESC, sa.name ASC, sa.id ASC') . '
             LIMIT ?
         ');
         $bindIndex = 1;

@@ -1,5 +1,16 @@
 RewriteEngine On
 
+# Keep one public origin for users and search engines.
+RewriteCond %{HTTP_HOST} !^(?:localhost|127\.0\.0\.1)(?::[0-9]+)?$ [NC]
+RewriteCond %{HTTP_HOST} !^heartbeatplay\.com$ [NC]
+RewriteRule ^ https://heartbeatplay.com%{REQUEST_URI} [R=301,L,NE]
+
+# Respect the original scheme when Apache is behind Cloudflare or another proxy.
+RewriteCond %{HTTP_HOST} !^(?:localhost|127\.0\.0\.1)(?::[0-9]+)?$ [NC]
+RewriteCond %{HTTPS} !=on
+RewriteCond %{HTTP:X-Forwarded-Proto} !^https$ [NC]
+RewriteRule ^ https://heartbeatplay.com%{REQUEST_URI} [R=301,L,NE]
+
 <IfModule mod_expires.c>
   ExpiresActive On
   ExpiresByType image/png "access plus 1 year"

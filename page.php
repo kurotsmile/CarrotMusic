@@ -69,6 +69,8 @@ if ($redirectNeeded) {
     exit;
 }
 
+music_set_canonical_url($canonicalUrl);
+
 $pageTitle = trim((string) ($page['seo_title'] ?? '')) !== ''
     ? (string) $page['seo_title']
     : (string) $page['title'];

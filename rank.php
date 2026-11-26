@@ -55,6 +55,11 @@ $monthLabel = date('m/Y', strtotime($selectedMonth . '-01'));
 $prevMonth = date('Y-m', strtotime($selectedMonth . '-01 -1 month'));
 $nextMonth = date('Y-m', strtotime($selectedMonth . '-01 +1 month'));
 $nextDisabled = $nextMonth > $currentMonth;
+$rankCanonicalUrl = music_rank_url($selectedMonth);
+if ($currentPage > 1) {
+    $rankCanonicalUrl = music_url_with_query($rankCanonicalUrl, ['page_no' => $currentPage]);
+}
+music_set_canonical_url($rankCanonicalUrl);
 $pageTitle = sprintf(music_label('music.rank.heading', 'Bảng xếp hạng tháng %s - ' . music_brand_name()), $monthLabel);
 music_render_header($pageTitle, sprintf(music_label('music.rank.meta_description', 'Bảng xếp hạng bài hát theo lượt nghe trong tháng %s trên ' . music_brand_name() . '.'), $monthLabel));
 ?>

@@ -224,6 +224,17 @@ function music_absolute_url(string $path = ''): string
     return rtrim(music_site_origin(), '/') . music_url($path);
 }
 
+function music_set_canonical_url(string $url): void
+{
+    $path = (string) (parse_url($url, PHP_URL_PATH) ?: '/');
+    if ($path === '' || $path[0] !== '/') {
+        $path = '/' . ltrim($path, '/');
+    }
+
+    $query = (string) (parse_url($url, PHP_URL_QUERY) ?: '');
+    $GLOBALS['music_canonical_url'] = 'https://' . music_primary_host() . $path . ($query !== '' ? '?' . $query : '');
+}
+
 function music_slug(string $value): string
 {
     $value = trim(rawurldecode((string) $value));
@@ -266,14 +277,27 @@ function music_redirect_to_canonical(string $canonicalUrl, array $removeQueryKey
         }
     }
 
-    if (!$redirectNeeded) {
-        return;
-    }
-
     $extraQuery = $visibleQuery;
     foreach ($removeQueryKeys as $key) {
         unset($extraQuery[$key]);
     }
+
+    $canonicalQuery = $extraQuery;
+    foreach (array_keys($canonicalQuery) as $key) {
+        if (preg_match('/^(?:utm_.+|gclid|fbclid|msclkid)$/i', (string) $key)) {
+            unset($canonicalQuery[$key]);
+        }
+    }
+    $resolvedCanonicalUrl = $canonicalUrl;
+    if ($canonicalQuery) {
+        $resolvedCanonicalUrl = music_url_with_query($resolvedCanonicalUrl, $canonicalQuery);
+    }
+    music_set_canonical_url($resolvedCanonicalUrl);
+
+    if (!$redirectNeeded) {
+        return;
+    }
+
     if ($extraQuery) {
         $canonicalUrl = music_url_with_query($canonicalUrl, $extraQuery);
     }
@@ -827,6 +851,7 @@ function music_render_header(string $title, string $description = '', string $im
     }
     $description = $description !== '' ? $description : music_label('music.meta.description', music_brand_name() . ' là nơi bạn tìm, nghe và lưu lại những bài hát hợp tâm trạng mỗi ngày.');
     $image = $image !== '' ? $image : music_url('favicon/android-chrome-512x512.png');
+    $canonicalUrl = (string) ($GLOBALS['music_canonical_url'] ?? '');
     $searchQuery = trim((string) ($_GET['q'] ?? ''));
     $lang = current_lang_key();
     $languageOptions = music_language_options($GLOBALS['pdo'] ?? null);
@@ -853,10 +878,16 @@ function music_render_header(string $title, string $description = '', string $im
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <title><?= music_h($title) ?></title>
     <meta name="description" content="<?= music_h($description) ?>">
+    <?php if ($canonicalUrl !== '' && http_response_code() < 400): ?>
+    <link rel="canonical" href="<?= music_h($canonicalUrl) ?>">
+    <?php endif; ?>
     <?= carrot_google_search_verification_meta($GLOBALS['pdo'] ?? null, 'CarrotMusic') ?>
     <meta property="og:title" content="<?= music_h($title) ?>">
     <meta property="og:description" content="<?= music_h($description) ?>">
     <meta property="og:image" content="<?= music_h($image) ?>">
+    <?php if ($canonicalUrl !== '' && http_response_code() < 400): ?>
+    <meta property="og:url" content="<?= music_h($canonicalUrl) ?>">
+    <?php endif; ?>
     <meta property="og:type" content="music.song">
     <meta name="twitter:card" content="summary_large_image">
     <link rel="apple-touch-icon" sizes="180x180" href="<?= music_h(music_url('favicon/apple-touch-icon.png')) ?>">
